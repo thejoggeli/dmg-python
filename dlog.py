@@ -37,10 +37,10 @@ def print_z80_st():
 def print_z80_op():
     print_msg("Z80", "op_decode\t" + "0x{0:0{1}X}".format(z80.op.code, 2) + "\t" + z80.op.name() + "\t" + z80.op.params())
 
-def print_mem(action, addr, value):
+def print_mem(action, addr, n1, value, n2):
     print_msg(
         "MEM",
         action + "\t" + 
-        "0x{0:0{1}X}".format(addr, 4) + "\t" +
-        "0x{0:0{1}X}".format(value, 2)
+        "0x{0:0{1}X}".format(addr, n1) + "\t" +
+        "0x{0:0{1}X}".format(value, n2)
     )

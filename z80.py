@@ -63,9 +63,6 @@ class RegisterSet:
     def set_a(self, byte):
         self.a = byte
     
-    get_r_map = [get_b, get_c, get_d, get_e, get_h, get_l, None, get_a]
-    set_r_map = [set_b, set_c, set_d, set_e, set_h, set_l, None, set_a]
-    
     def get_bc(self):
         return self.c|(self.b<<8)
     def get_de(self):
@@ -77,48 +74,68 @@ class RegisterSet:
     def get_sp(self):
         return self.sp
     
-    def set_bc(self, bc):
-        self.b = (bc>>8)&0xFF
-        self.c = bc&0xFF
-    def set_de(self, de):
-        self.d = (de>>8)&0xFF
-        self.e = de&0xFF
-    def set_hl(self, hl):
-        self.h = (hl>>8)&0xFF
-        self.l = hl&0xFF
-    def set_af(self, af):
-        self.a = (af>>8)&0xFF
-        self.f = af&0xFF
-    def set_sp(self, sp):
-        self.sp = sp
+    def set_bc(self, word):
+        self.b = (word>>8)&0xFF
+        self.c = word&0xFF
+    def set_de(self, word):
+        self.d = (word>>8)&0xFF
+        self.e = word&0xFF
+    def set_hl(self, word):
+        self.h = (word>>8)&0xFF
+        self.l = word&0xFF
+    def set_af(self, word):
+        self.a = (word>>8)&0xFF
+        self.f = word&0xFF
+    def set_sp(self, word):
+        self.sp = word
         
     def dec_hl(self):
-        hl = self.l|(self.h<<8)
-        if(hl == 0):
+        word = self.l|(self.h<<8)
+        if(word == 0):
             self.h = 0xFF
             self.l = 0xFF
         else:
-            hl -= 1
-            self.h = (hl>>8)&0xFF
-            self.l = hl&0xFF
+            word -= 1
+            self.h = (word>>8)&0xFF
+            self.l = word&0xFF
 
     def inc_hl(self):
-        hl = self.l|(self.h<<8)
-        if(hl == 0xFFFF):
+        word = self.l|(self.h<<8)
+        if(word == 0xFFFF):
             self.h = 0x00
             self.l = 0x00
         else:
-            hl += 1
-            self.h = (hl>>8)&0xFF
-            self.l = hl&0xFF
+            word += 1
+            self.h = (word>>8)&0xFF
+            self.l = word&0xFF
+    
+    get_r_map = [get_b, get_c, get_d, get_e, get_h, get_l, None, get_a]
+    set_r_map = [set_b, set_c, set_d, set_e, set_h, set_l, None, set_a]
         
-    def __init__(self):
-        pass
+    get_rp_map = [get_bc, get_de, get_hl, get_sp]
+    set_rp_map = [set_bc, set_de, set_hl, set_sp]
+        
+    get_rp2_map = [get_bc, get_de, get_hl, get_af]
+    set_rp2_map = [set_bc, set_de, set_hl, set_af]
+        
     def get_r(self, r):
         return self.get_r_map[r](self)
     def set_r(self, r, byte):
         return self.set_r_map[r](self, byte)
         
+    def get_rp(self, rp):
+        return self.get_rp_map[rp](self)
+    def set_rp(self, rp, word):
+        return self.set_rp_map[rp](self, word)
+        
+    def get_rp2(self, rp2):
+        return self.get_rp_map[rp2](self)
+    def set_rp2(self, rp2, word):
+        return self.set_rp_map[rp2](self, word)
+        
+    def __init__(self):
+        pass
+                
 reg = RegisterSet()
 
 cycles = 0
@@ -252,7 +269,19 @@ def op_ldi_hlmem_a():
     hl = reg.get_hl() 
     mem.write_byte(reg.get_hl(), reg.get_a())
     reg.inc_hl()
-    op.cycles = 8   
+    op.cycles = 8
+def op_ld_rp_nn():
+    global reg, op
+    rp = (op.code>>4)&0x03
+    nn = mem.read_word(reg.pc)
+    reg.set_rp(rp, nn)
+    reg.pc += 2
+    op.cycles = 12
+def op_ld_sp_hl():
+    global reg, op
+    reg.set_sp(reg.get_hl())
+    op.cycles = 8
+    
 def op_xxx():
     global reg, op
     dlog.print_error("Z80", "invalid opcode " + hex(op.code) + " at " +  hex(reg.pc-1))
@@ -350,6 +379,11 @@ op.map[0x32] = [op_ldd_hlmem_a, "LDD", "(HL),A"]
 op.map[0x2A] = [op_ldi_a_hlmem, "LDI", "A,(HL)"]
 op.map[0x22] = [op_ldi_hlmem_a, "LDI", "(HL),A"]
 
+op.map[0x01] = [op_ld_rp_nn, "LD", "BC,nn"]
+op.map[0x11] = [op_ld_rp_nn, "LD", "DE,nn"]
+op.map[0x21] = [op_ld_rp_nn, "LD", "HL,nn"]
+op.map[0x31] = [op_ld_rp_nn, "LD", "SP,nn"]
+op.map[0xF9] = [op_ld_sp_hl, "LD", "SP,HL"]
 
 
 
