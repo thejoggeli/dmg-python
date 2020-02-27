@@ -4,12 +4,39 @@ import mem
 
 class OP:
     cycles = 0
+    prefix = 0
     code = 0
-    map = [None]*256
-    def name(self, opcode):
-        return self.map[opcode][1]
-    def params(self, opcode):
-        return self.map[opcode][2]
+    map = None
+    map_nopref = None
+    map_cbpref = None
+    
+    def code_str(self, spacer = ""):    
+        if(self.prefix == 0x00):
+            return "00{0:0{1}X}".format(self.code, 2)
+        else:
+            return("{0:0{1}X}".format(self.prefix, 2) + spacer + 
+                   "{0:0{1}X}".format(self.code, 2))
+    def name_str(self):
+        return self.map[self.code][1]
+    def params_str(self):
+        return self.map[self.code][2]
+    def bytes_to_str(self, bytes, spacer = "\t"):       
+        byte = bytes[0]
+        if(byte == 0xCB):
+            return(self.map_cbpref[bytes[1]][1] + spacer +
+                   self.map_cbpref[bytes[1]][2])
+        elif(byte == 0xDD):
+            dlog.print_error("Z80", "0xDD prefix not implemented")
+            return "not implemented"
+        elif(byte == 0xED):
+            dlog.print_error("Z80", "0xDD prefix not implemented")
+            return "not implemented"
+        elif(byte == 0xFD):
+            dlog.print_error("Z80", "0xDD prefix not implemented")
+            return "not implemented"
+        else:
+            return(self.map_nopref[byte][1] + spacer +
+                   self.map_nopref[byte][2])
 op = OP()
 
 class Register:
@@ -123,7 +150,28 @@ class RegisterSet:
     def reset_flag_h(self):
         self.f &= 0xDF
     def reset_flag_c(self):
-        self.f &= 0xEF
+        self.f &= 0xEF        
+        
+    def set_flag_z_to(self, val):
+        if(val):
+            self.f |= 0x80
+        else:
+            self.f &= 0x7F
+    def set_flag_n_to(self, val):
+        if(val):
+            self.f |= 0x40
+        else:
+            self.f &= 0xBF
+    def set_flag_h_to(self, val):
+        if(val):
+            self.f |= 0x20
+        else:
+            self.f &= 0xDF
+    def set_flag_c_to(self, val):
+        if(val):
+            self.f |= 0x10
+        else:
+            self.f &= 0xEF
     
     def get_flag_z(self):
         return (self.f >> 7) & 0x01
@@ -164,19 +212,62 @@ class RegisterSet:
 reg = RegisterSet()
 
 cycles = 0
+halted = False
+stopped = False
+interrupt_enabled = False
+interrupt_requested = False
 
 def init():
     pass
     
 def execute():
-    global op, reg, cycles
+    global op, reg
+    global cycles, halted, stopped
+    global interrupt_enabled, interrupt_requested
+        
+    if(halted):
+        dlog.print_error("Z80", "halted behavior not implemented")
+        
+    if(stopped):
+        dlog.print_error("Z80", "stopped behavior not implemented")
+        
+    if(interrupt_enabled):
+        dlog.print_error("Z80", "interrupt_enabled behavior not implemented")
+        
+    if(interrupt_requested):
+        dlog.print_error("Z80", "interrupt_requested behavior not implemented")
     
     # print current cpu state
     if(dlog.enable_z80):
         dlog.print_z80_st()
         
     # fetch op code
-    op.code = mem.read_byte(reg.pc); reg.pc += 1
+    byte = mem.read_byte(reg.pc); reg.pc += 1
+    if(byte == 0xCB):
+        op.prefix = 0xCB
+        op.code = mem.read_byte(reg.pc); reg.pc += 1
+        op.map = op.map_cbpref
+    elif(byte == 0xDD):
+        dlog.print_error("Z80", "0xDD prefix not implemented")
+        op.prefix = 0x00
+        op.code = 0x00
+        op.map = None
+    elif(byte == 0xED):
+        dlog.print_error("Z80", "0xDD prefix not implemented")
+        op.prefix = 0x00
+        op.code = 0x00
+        op.map = None    
+    elif(byte == 0xFD):
+        dlog.print_error("Z80", "0xDD prefix not implemented")
+        op.prefix = 0x00
+        op.code = 0x00
+        op.map = None    
+    else:
+        op.prefix = 0x00
+        op.code = byte
+        op.map = op.map_nopref
+    
+    # wrap pc
     if(reg.pc > 0xFFFF):
         reg.pc &= 0xFFFF
         dlog.print_error("Z80", "pc wrap in execute (what is actual behavior?)")
@@ -194,7 +285,7 @@ def exit():
     if(dlog.enable_z80):
         dlog.print_z80_st()
 
-######################################################## OP LD (8-bit)###
+### OP LD (8-bit)###################################################################
 def op_ld_r1_n():
     r1 = (op.code >> 3)&0x07 #y
     n = mem.read_byte(reg.pc); reg.pc += 1
@@ -274,7 +365,7 @@ def op_ldi_hlmem_a():
     reg.inc_hl()
     op.cycles = 8
     
-######################################################## OP LD (16-bit)###
+### OP LD (16-bit)##################################################################
 def op_ld_rp_nn():
     rp = (op.code>>4)&0x03 #p
     nn = mem.read_word(reg.pc); reg.pc += 2
@@ -298,7 +389,7 @@ def op_ld_nnmem_sp():
     mem.write_word(nn, reg.sp)    
     op.cycles = 20
     
-######################################################## OP PUSH ###
+### OP PUSH ########################################################################
 def op_push_af():
     reg.sp -= 1; mem.write_byte(reg.sp, reg.a)
     reg.sp -= 1; mem.write_byte(reg.sp, reg.f)
@@ -316,7 +407,7 @@ def op_push_hl():
     reg.sp -= 1; mem.write_byte(reg.sp, reg.l)
     op.cycles = 16
     
-######################################################## OP POP ###
+### OP POP ###
 def op_pop_af():
     reg.f = mem.read_byte(reg.sp); reg.sp += 1
     reg.a = mem.read_byte(reg.sp); reg.sp += 1
@@ -334,7 +425,7 @@ def op_pop_hl():
     reg.h = mem.read_byte(reg.sp); reg.sp += 1
     op.cycles = 12
     
-######################################################## OP ADD (8-bit) ###
+### OP ADD (8-bit) #################################################################
 def op_add_a_r2():
     s2 = reg.get_r((op.code >> 0)&0x07) #z
     op_add_a_x_helper(s2)
@@ -349,17 +440,17 @@ def op_add_a_n():
     op.cycles = 8
 def op_add_a_x_helper(s2):
     s1 = reg.a
-    res = s1+s2
+    result = s1+s2
     reg.reset_flags()
-    if(res == 0):
+    if(result == 0):
         reg.set_flag_z()
-    if(res > 0xFF):
+    if(result > 0xFF):
         reg.set_flag_c()
     if((s1&0xf)+(s2&0xf) > 0xF):
         reg.set_flag_h()
-    reg.a = res&0xFF
+    reg.a = result&0xFF
     
-######################################################## OP ADC (8-bit) ###
+### OP ADC (8-bit) #################################################################
 def op_adc_a_r2():
     s2 = reg.get_r((op.code >> 0)&0x07) #z
     op_adc_a_x_helper(s2)
@@ -375,18 +466,18 @@ def op_adc_a_n():
 def op_adc_a_x_helper(s2):
     s1 = reg.a
     sC = reg.get_flag_c()
-    res = s1+s2+sC
+    result = s1+s2+sC
     reg.reset_flags()
-    if(res == 0):
+    if(result == 0):
         reg.set_flag_z()
-    if(res > 0xFF):
+    if(result > 0xFF):
         reg.set_flag_c()
     if((s1&0xf)+(s2&0xf)+sC > 0xF):
         # TODO half carry might be wrong
         reg.set_flag_h()
-    reg.a = res&0xFF
+    reg.a = result&0xFF
     
-######################################################## OP SUB (8-bit) ###
+### OP SUB (8-bit) #################################################################
 def op_sub_a_r2():
     s2 = reg.get_r((op.code >> 0)&0x07) #z
     op_sub_a_x_helper(s2)
@@ -401,20 +492,20 @@ def op_sub_a_n():
     op.cycles = 8
 def op_sub_a_x_helper(s2):
     s1 = reg.a
-    res = s1-s2
+    result = s1-s2
     reg.reset_flags()
     reg.set_flag_n()
-    if(res == 0):
+    if(result == 0):
         reg.set_flag_z()
-    if(res < 0):
+    if(result < 0):
         # TODO carry might be wrong
         reg.set_flag_c()
     if((s1&0xf)-(s2&0xf) < 0):
         # TODO half carry might be wrong
         reg.set_flag_h()
-    reg.a = res&0xFF
+    reg.a = result&0xFF
     
-######################################################## OP SBC (8-bit) ###
+### OP SBC (8-bit) #################################################################
 def op_sbc_a_r2():
     s2 = reg.get_r((op.code >> 0)&0x07) #z
     op_sbc_a_x_helper(s2)
@@ -430,19 +521,19 @@ def op_sbc_a_n():
 def op_sbc_a_x_helper(s2):
     s1 = reg.a
     sC = reg.get_flag_c()
-    res = s1-s2-sC
+    result = s1-s2-sC
     reg.reset_flags()
     reg.set_flag_n()
-    if(res == 0):
+    if(result == 0):
         reg.set_flag_z()
-    if(res < 0):
+    if(result < 0):
         reg.set_flag_c()
     if((s1&0xf)-(s2&0xf)-sC < 0):
         # TODO half carry might be wrong
         reg.set_flag_h()
-    reg.a = res&0xFF
+    reg.a = result&0xFF
     
-######################################################## OP AND (8-bit) ###
+### OP AND (8-bit) #################################################################
 def op_and_a_r2():
     s2 = reg.get_r((op.code >> 0)&0x07) #z
     op_and_a_x_helper(s2)
@@ -457,14 +548,14 @@ def op_and_a_n():
     op.cycles = 8
 def op_and_a_x_helper(s2):
     s1 = reg.a
-    res = s1&s2
+    result = s1&s2
     reg.reset_flags()
     reg.set_flag_h()
-    if(res == 0):
-        res.set_flag_z()
-    reg.a = res
+    if(result == 0):
+        result.set_flag_z()
+    reg.a = result
 
-######################################################## OP OR (8-bit) ###
+### OP OR (8-bit) ##################################################################
 def op_or_a_r2():
     s2 = reg.get_r((op.code >> 0)&0x07) #z
     op_or_a_x_helper(s2)
@@ -479,13 +570,13 @@ def op_or_a_n():
     op.cycles = 8
 def op_or_a_x_helper(s2):
     s1 = reg.a
-    res = s1|s2
+    result = s1|s2
     reg.reset_flags()
-    if(res == 0):
-        res.set_flag_z()
-    reg.a = res
+    if(result == 0):
+        result.set_flag_z()
+    reg.a = result
 
-######################################################## OP XOR (8-bit) ###
+### OP XOR (8-bit) #################################################################
 def op_xor_a_r2():
     s2 = reg.get_r((op.code >> 0)&0x07) #z
     op_xor_a_x_helper(s2)
@@ -500,13 +591,13 @@ def op_xor_a_n():
     op.cycles = 8
 def op_xor_a_x_helper(s2):
     s1 = reg.a
-    res = s1^s2
+    result = s1^s2
     reg.reset_flags()
-    if(res == 0):
-        res.set_flag_z()
-    reg.a = res
+    if(result == 0):
+        result.set_flag_z()
+    reg.a = result
     
-######################################################## OP CP (8-bit) ###
+### OP CP (8-bit) ##################################################################
 def op_cp_a_r2():
     s2 = reg.get_r((op.code >> 0)&0x07) #z
     op_cp_a_x_helper(s2)
@@ -521,80 +612,80 @@ def op_cp_a_n():
     op.cycles = 8
 def op_cp_a_x_helper(s2):
     s1 = reg.a
-    res = s1-s2
+    result = s1-s2
     reg.reset_flags()
     reg.set_flag_n()
-    if(res == 0):
+    if(result == 0):
         reg.set_flag_z()
-    if(res < 0):
+    if(result < 0):
         reg.set_flag_c()
     if((s1&0xf)-(s2&0xf) < 0):
         # TODO half carry might be wrong
         reg.set_flag_h()
         
-######################################################## OP INC (8-bit) ###
+### OP INC (8-bit) #################################################################
 def op_inc_r1():
     r1 = (op.code >> 3)&0x07 # y
     s1 = reg.get_r(r1)
-    res = (s1+1)&0xFF
-    reg.set_r(r1, res)
-    op_inc_x_helper(res)
+    result = (s1+1)&0xFF
+    reg.set_r(r1, result)
+    op_inc_x_helper(result)
     op.cycles = 4
 def op_inc_hlmem():
     hl = reg.get_hl()
     s1 = mem.read_byte(hl)
-    res = (s1+1)&0xFF
-    mem.write_byte(hl, res)
-    op_inc_x_helper(res)
+    result = (s1+1)&0xFF
+    mem.write_byte(hl, result)
+    op_inc_x_helper(result)
     op.cycles = 12
-def op_inc_x_helper(res):
+def op_inc_x_helper(result):
     reg.reset_flag_n()
-    if(res == 0):
+    if(result == 0):
         reg.set_flag_z()
     else:
         reg.reset_flag_z()
-    if(res == 0x10):
+    if(result == 0x10):
         # TODO half carry might be wrong
         reg.set_flag_h()
     else:
         # TODO half carry might be wrong
         reg.reset_flag_h()
         
-######################################################## OP DEC (8-bit) ###
+### OP DEC (8-bit) #################################################################
 def op_dec_r1():
     r1 = (op.code >> 3)&0x07 # y
     s1 = reg.get_r(r1)
-    res = (s1-1)&0xFF
-    reg.set_r(r1, res)
-    op_dec_x_helper(res)
+    result = (s1-1)&0xFF
+    reg.set_r(r1, result)
+    op_dec_x_helper(result)
     op.cycles = 4
 def op_dec_hlmem():
     hl = reg.get_hl()
     s1 = mem.read_byte(hl)
-    res = (s1-1)&0xFF
-    mem.write_byte(hl, res)
-    op_dec_x_helper(res)
+    result = (s1-1)&0xFF
+    mem.write_byte(hl, result)
+    op_dec_x_helper(result)
     op.cycles = 12
-def op_dec_x_helper(res):
+def op_dec_x_helper(result):
     reg.set_flag_n()
-    if(res == 0):
+    if(result == 0):
         reg.set_flag_z()
     else:
         reg.reset_flag_z()
-    if(res == 0x10):
+    if(result == 0x10):
         # TODO half carry might be wrong
         reg.set_flag_h()
     else:
         # TODO half carry might be wrong
         reg.reset_flag_h()
         
-######################################################## OP ADD (16-bit) ###
+### OP ADD (16-bit) ###
 def op_add_hl_rp():
     s1 = reg.get_hl()
     s2 = reg.get_rp((op.code>>4)&0x03) #p
-    res = s1+s2
+    result = s1+s2
     reg.reset_flag_n()
-    if(res > 0xFFFF):
+    if(result > 0xFFFF):
         reg.set_flag_c()
     else:
         reg.reset_flag_c()
@@ -604,7 +695,7 @@ def op_add_hl_rp():
     else:
         # TODO half carry might be wrong
         reg.reset_flag_h()    
-    reg.set_hl(res&0xFFFF)
+    reg.set_hl(result&0xFFFF)
     op.cycles = 8
 def op_add_sp_n():
     # flags?
@@ -614,7 +705,7 @@ def op_add_sp_n():
     if(n > 127):
         # sub operation
         n = n-256 # signed
-        res = reg.sp + n
+        result = reg.sp + n
         reg.reset_flags()
         if((reg.sp&0xFF)+n < 0):
             # TODO carry might be wrong
@@ -622,10 +713,10 @@ def op_add_sp_n():
         if((reg.sp&0xF)+(n&0xF) < 0):
             # TODO half carry might be wrong
             reg.set_flag_h()      
-        reg.sp = res&0xFFFF
+        reg.sp = result&0xFFFF
     else:
         # add operation
-        res = reg.sp + n        
+        result = reg.sp + n        
         reg.reset_flags()
         if((reg.sp&0xFF)+n > 0xFF):
             # TODO carry might be wrong
@@ -633,249 +724,528 @@ def op_add_sp_n():
         if((reg.sp&0xF)+(n&0xF) > 0xF):
             # TODO half carry might be wrong
             reg.set_flag_h()
-        reg.sp = res&0xFFFF
+        reg.sp = result&0xFFFF
     op.cycles = 16
     
-######################################################## OP INC (16-bit) ###
+### OP INC (16-bit) ################################################################
 def op_inc_rp():
     rp = (op.code>>4)&0x03 #p
     s1 = reg.get_rp(rp)
     reg.set_rp(rp, (s1+1)&0xFFFF)
     op.cycles = 8
     
-######################################################## OP DEC (16-bit) ###
+### OP DEC (16-bit) ################################################################
 def op_dec_rp():
     rp = (op.code>>4)&0x03 #p
     s1 = reg.get_rp(rp)
     reg.set_rp(rp, (s1-1)&0xFFFF)
     op.cycles = 8
     
-######################################################## OP XXX ###
+### OP SWAP ########################################################################
+def op_swap_r():
+    r = (op.code >> 0)&0x07 #z
+    s1 = reg.get_r(r)
+    result = ((s1&0x0F)<<4)|((s1&0xF0)>>4)
+    reg.reset_flags()
+    if(result == 0):
+        reg.set_flag_z()
+    reg.set_r(r, result)
+    op.cycles = 8
+def op_swap_hlmem():
+    hl = reg.get_hl()
+    s1 = mem.read_byte(hl)
+    result = ((s1&0x0F)<<4)|((s1&0xF0)>>4)
+    reg.reset_flags()
+    if(result == 0):
+        reg.set_flag_z()
+    mem.write_byte(hl, result)
+    op.cycles = 16
+    
+### OP DAA #########################################################################
+def op_daa():
+    # https://stackoverflow.com/questions/8119577/z80-daa-instruction
+    # TODO might be wrong?
+    t = 0
+    A = reg.a
+    H = reg.get_flag_h()
+    C = reg.get_flag_c()
+    N = reg.get_flag_n()
+    if(H or ((A & 0xF) > 9)):
+         t += 1
+    if(C or (A > 0x99)):   
+        t += 2
+        C = 1
+    if (N and not H):
+        H=0
+    else:
+        if (N and H):
+            H = (((A & 0x0F)) < 6)
+        else:
+            H = ((A & 0x0F) >= 0x0A)   
+    if(t==1):
+            A += 0xFA if N else 0x06 # -6:6    
+    elif(t==2):
+            A += 0xA0 if N else 0x60 # -0x60:0x60    
+    elif(t==3):
+            A += 0x9A if N else 0x66 # -0x66:0x66
+    reg.a = A
+    reg.set_flag_h_to(H)
+    reg.set_flag_h_to(C)
+    reg.set_flag_h_to(not A)
+    reg.set_flag_h_to(N)
+    op.cycles = 4
+    dlog.print_warning("Z80", "op_daa might be wrong?")
+    
+### OP CPL #########################################################################
+def op_cpl():
+    reg.set_flag_n()
+    reg.set_flag_h()
+    reg.a = (~reg.a)&0xFF
+    op.cycles = 4
+    
+### OP CCF #########################################################################
+def op_ccf():
+    reg.reset_flag_n()
+    reg.reset_flag_h()
+    if(reg.get_flag_c()):
+        reg.reset_flag_c()
+    else:
+        reg.set_flag_c()
+    op.cycles = 4
+    
+### OP SCF #########################################################################
+def op_scf():
+    reg.reset_flag_n()
+    reg.reset_flag_h()
+    reg.set_flag_c()
+    op.cycles = 4
+    
+### OP NOP #########################################################################
+def op_nop():
+    op.cycles = 4
+    
+### OP HALT ########################################################################
+def op_halt():
+    global halted
+    halted = True
+    op.cycles = 4
+    
+### OP STOP ########################################################################
+def op_stop():
+    global stopped
+    stopped = True
+    # Skip one byte because
+    # https://stackoverflow.com/questions/41353869/length-of-instruction-ld-a-c-in-gameboy-z80-processor
+    # There is a hardware bug on Gameboy Classic that causes 
+    # the instruction following a STOP to be skipped.
+    reg.pc += 1
+    op.cycles = 4
+    
+### OP DI ##########################################################################
+def op_di():
+    global interrupt_enabled
+    interrupt_enabled = False
+    op.cycles = 4
+    
+### OP EI ##########################################################################
+def op_ei():
+    global interrupt_enabled
+    interrupt_enabled = True    
+    
+### OP RLC #########################################################################   
+def op_rlc_a():
+    s = reg.a    
+    result = op_rlc_x_helper(s)
+    reg.a = result
+    op.cycles = 4
+def op_rlc_r():
+    r = (op.code >> 0)&0x07 #z
+    s = reg.get_r(r)
+    result = op_rlc_x_helper(s)
+    reg.set_r(r, result)
+    op.cycles = 8
+def op_rlc_hlmem():
+    hl = reg.get_hl()
+    s = mem.read_byte(hl)
+    result = op_rlc_x_helper(s)
+    mem.write_byte(hl, result)
+    op.cycles = 16
+def op_rlc_x_helper(s):
+    result = ((s<<1)&0xFF)
+    reg.reset_flags()
+    if(result == 0):
+        reg.set_flag_z()
+    if(s&0x80):
+        reg.set_flag_c()
+    return result
+    
+### OP RL ##########################################################################
+def op_rl_a():
+    s = reg.a    
+    result = op_rl_x_helper(s)
+    reg.a = result
+    op.cycles = 4
+def op_rl_r():
+    r = (op.code >> 0)&0x07 #z
+    s = reg.get_r(r)
+    result = op_rl_x_helper(s)
+    reg.set_r(r, result)
+    op.cycles = 8
+def op_rl_hlmem():
+    hl = reg.get_hl()
+    s = mem.read_byte(hl)
+    result = op_rl_x_helper(s)
+    mem.write_byte(hl, result)
+    op.cycles = 16
+def op_rl_x_helper(s):
+    result = ((s<<1)&0xFF)+reg.get_flag_c()
+    reg.reset_flags()
+    if(result == 0):
+        reg.set_flag_z()
+    if(s&0x80):
+        reg.set_flag_c()
+    return result
+    
+### OP RRC #########################################################################
+def op_rrc_a():
+    s = reg.a    
+    result = op_rrc_x_helper(s)
+    reg.a = result
+    op.cycles = 4
+def op_rrc_r():
+    r = (op.code >> 0)&0x07 #z
+    s = reg.get_r(r)
+    result = op_rrc_x_helper(s)
+    reg.set_r(r, result)
+    op.cycles = 8
+def op_rrc_hlmem():
+    hl = reg.get_hl()
+    s = mem.read_byte(hl)
+    result = op_rrc_x_helper(s)
+    mem.write_byte(hl, result)
+    op.cycles = 16
+def op_rrc_x_helper(s):
+    result = ((s>>1)&0xFF)
+    reg.reset_flags()
+    if(result == 0):
+        reg.set_flag_z()
+    if(s&0x01):
+        reg.set_flag_c()
+    return result
+    
+### OP RR ##########################################################################
+def op_rr_a():
+    s = reg.a    
+    result = op_rr_x_helper(s)
+    reg.a = result
+    op.cycles = 4
+def op_rr_r():
+    r = (op.code >> 0)&0x07 #z
+    s = reg.get_r(r)
+    result = op_rr_x_helper(s)
+    reg.set_r(r, result)
+    op.cycles = 8
+def op_rr_hlmem():
+    hl = reg.get_hl()
+    s = mem.read_byte(hl)
+    result = op_rr_x_helper(s)
+    mem.write_byte(hl, result)
+    op.cycles = 16
+def op_rr_x_helper(s):
+    result = ((s>>1)&0xFF)+(reg.get_flag_c()<<7)
+    reg.reset_flags()
+    if(result == 0):
+        reg.set_flag_z()
+    if(s&0x01):
+        reg.set_flag_c()
+    return result
+    
+### OP XXX #########################################################################
 def op_xxx():
     dlog.print_error("Z80", "invalid opcode " + hex(op.code) + " at " +  hex(reg.pc-1))
+        
+### OP MAP (UNPREFIXED) ############################################################
+op.map_nopref = [op_xxx]*256
 
-######################################################## OP MAP ###
-op.map = [op_xxx]*256
-op.map[0x7F] = [op_ld_r1_r2,    "LD", "A,A"]
-op.map[0x78] = [op_ld_r1_r2,    "LD", "A,B"]
-op.map[0x79] = [op_ld_r1_r2,    "LD", "A,C"]
-op.map[0x7A] = [op_ld_r1_r2,    "LD", "A,D"]
-op.map[0x7B] = [op_ld_r1_r2,    "LD", "A,E"]
-op.map[0x7C] = [op_ld_r1_r2,    "LD", "A,H"]
-op.map[0x7D] = [op_ld_r1_r2,    "LD", "A,L"]
-op.map[0x47] = [op_ld_r1_r2,    "LD", "B,A"]
-op.map[0x40] = [op_ld_r1_r2,    "LD", "B,B"]
-op.map[0x41] = [op_ld_r1_r2,    "LD", "B,C"]
-op.map[0x42] = [op_ld_r1_r2,    "LD", "B,D"]
-op.map[0x43] = [op_ld_r1_r2,    "LD", "B,E"]
-op.map[0x44] = [op_ld_r1_r2,    "LD", "B,H"]
-op.map[0x45] = [op_ld_r1_r2,    "LD", "B,L"]
-op.map[0x4F] = [op_ld_r1_r2,    "LD", "C,A"]
-op.map[0x48] = [op_ld_r1_r2,    "LD", "C,B"]
-op.map[0x49] = [op_ld_r1_r2,    "LD", "C,C"]
-op.map[0x4A] = [op_ld_r1_r2,    "LD", "C,D"]
-op.map[0x4B] = [op_ld_r1_r2,    "LD", "C,E"]
-op.map[0x4C] = [op_ld_r1_r2,    "LD", "C,H"]
-op.map[0x4D] = [op_ld_r1_r2,    "LD", "C,L"]
-op.map[0x57] = [op_ld_r1_r2,    "LD", "D,A"]
-op.map[0x50] = [op_ld_r1_r2,    "LD", "D,B"]
-op.map[0x51] = [op_ld_r1_r2,    "LD", "D,C"]
-op.map[0x52] = [op_ld_r1_r2,    "LD", "D,D"]
-op.map[0x53] = [op_ld_r1_r2,    "LD", "D,E"]
-op.map[0x54] = [op_ld_r1_r2,    "LD", "D,H"]
-op.map[0x55] = [op_ld_r1_r2,    "LD", "D,L"]
-op.map[0x5F] = [op_ld_r1_r2,    "LD", "E,A"]
-op.map[0x58] = [op_ld_r1_r2,    "LD", "E,B"]
-op.map[0x59] = [op_ld_r1_r2,    "LD", "E,C"]
-op.map[0x5A] = [op_ld_r1_r2,    "LD", "E,D"]
-op.map[0x5B] = [op_ld_r1_r2,    "LD", "E,E"]
-op.map[0x5C] = [op_ld_r1_r2,    "LD", "E,H"]
-op.map[0x5D] = [op_ld_r1_r2,    "LD", "E,L"]
-op.map[0x67] = [op_ld_r1_r2,    "LD", "H,A"]
-op.map[0x60] = [op_ld_r1_r2,    "LD", "H,B"]
-op.map[0x61] = [op_ld_r1_r2,    "LD", "H,C"]
-op.map[0x62] = [op_ld_r1_r2,    "LD", "H,D"]
-op.map[0x63] = [op_ld_r1_r2,    "LD", "H,E"]
-op.map[0x64] = [op_ld_r1_r2,    "LD", "H,H"]
-op.map[0x65] = [op_ld_r1_r2,    "LD", "H,L"] 
-op.map[0x6F] = [op_ld_r1_r2,    "LD", "L,A"]
-op.map[0x68] = [op_ld_r1_r2,    "LD", "L,B"]
-op.map[0x69] = [op_ld_r1_r2,    "LD", "L,C"]
-op.map[0x6A] = [op_ld_r1_r2,    "LD", "L,D"]
-op.map[0x6B] = [op_ld_r1_r2,    "LD", "L,E"]
-op.map[0x6C] = [op_ld_r1_r2,    "LD", "L,H"]
-op.map[0x6D] = [op_ld_r1_r2,    "LD", "L,L"]
-op.map[0x3E] = [op_ld_r1_n,     "LD", "A,n"]
-op.map[0x06] = [op_ld_r1_n,     "LD", "B,n"]
-op.map[0x0E] = [op_ld_r1_n,     "LD", "C,n"]
-op.map[0x16] = [op_ld_r1_n,     "LD", "D,n"]
-op.map[0x1E] = [op_ld_r1_n,     "LD", "E,n"]
-op.map[0x26] = [op_ld_r1_n,     "LD", "H,n"]
-op.map[0x2E] = [op_ld_r1_n,     "LD", "L,n"]
-op.map[0xEA] = [op_ld_nnmem_a,  "LD", "(nn),A"]
-op.map[0x02] = [op_ld_bcmem_a,  "LD", "(BC),A"]
-op.map[0x12] = [op_ld_demem_a,  "LD", "(DE),A"]
-op.map[0x77] = [op_ld_hlmem_r2, "LD", "(HL),A"]
-op.map[0x70] = [op_ld_hlmem_r2, "LD", "(HL),B"]
-op.map[0x71] = [op_ld_hlmem_r2, "LD", "(HL),C"]
-op.map[0x72] = [op_ld_hlmem_r2, "LD", "(HL),D"]
-op.map[0x73] = [op_ld_hlmem_r2, "LD", "(HL),E"]
-op.map[0x74] = [op_ld_hlmem_r2, "LD", "(HL),H"]
-op.map[0x75] = [op_ld_hlmem_r2, "LD", "(HL),L"]
-op.map[0x36] = [op_ld_hlmem_n,  "LD", "(HL),n"]
-op.map[0xFA] = [op_ld_a_nnmem,  "LD", "A,(nn)"]
-op.map[0x0A] = [op_ld_a_bcmem,  "LD", "A,(BC)"]
-op.map[0x1A] = [op_ld_a_demem,  "LD", "A,(DE)"]
-op.map[0x7E] = [op_ld_r1_hlmem, "LD", "A,(HL)"]
-op.map[0x46] = [op_ld_r1_hlmem, "LD", "B,(HL)"]
-op.map[0x4E] = [op_ld_r1_hlmem, "LD", "C,(HL)"]
-op.map[0x56] = [op_ld_r1_hlmem, "LD", "D,(HL)"]
-op.map[0x5E] = [op_ld_r1_hlmem, "LD", "E,(HL)"]
-op.map[0x66] = [op_ld_r1_hlmem, "LD", "H,(HL)"]
-op.map[0x6E] = [op_ld_r1_hlmem, "LD", "L,(HL)"]
-op.map[0xF2] = [op_ld_a_ff00c,  "LD", "A,(0xFF00+C)"]
-op.map[0xE2] = [op_ld_ff00c_a,  "LD", "(0xFF00+C),A"]
-op.map[0xF0] = [op_ld_a_ff00n,  "LD", "A,(0xFF00+n)"]
-op.map[0xE0] = [op_ld_ff00n_a,  "LD", "(0xFF00+n),A"]
-op.map[0x3A] = [op_ldd_a_hlmem, "LD", "A,(HL-)"]
-op.map[0x32] = [op_ldd_hlmem_a, "LD", "(HL-),A"]
-op.map[0x2A] = [op_ldi_a_hlmem, "LD", "A,(HL+)"]
-op.map[0x22] = [op_ldi_hlmem_a, "LD", "(HL+),A"]
-
-op.map[0x01] = [op_ld_rp_nn,    "LD", "BC,nn"]
-op.map[0x11] = [op_ld_rp_nn,    "LD", "DE,nn"]
-op.map[0x21] = [op_ld_rp_nn,    "LD", "HL,nn"]
-op.map[0x31] = [op_ld_rp_nn,    "LD", "SP,nn"]
-op.map[0xF9] = [op_ld_sp_hl,    "LD", "SP,HL"]
-op.map[0xF8] = [op_ldhl_sp_n,   "LD", "HL,SP+n"]
-op.map[0x08] = [op_ld_nnmem_sp, "LD", "(nn),SP"]
-
-op.map[0xF5] = [op_push_af,     "PUSH", "AF"]
-op.map[0xC5] = [op_push_bc,     "PUSH", "BC"]
-op.map[0xD5] = [op_push_de,     "PUSH", "DE"]
-op.map[0xE5] = [op_push_hl,     "PUSH", "HL"]
-
-op.map[0xF1] = [op_pop_af,      "POP", "AF"]
-op.map[0xC1] = [op_pop_bc,      "POP", "BC"]
-op.map[0xD1] = [op_pop_de,      "POP", "DE"]
-op.map[0xE1] = [op_pop_hl,      "POP", "HL"]
-
-op.map[0x87] = [op_add_a_r2,    "ADD", "A,A"]
-op.map[0x80] = [op_add_a_r2,    "ADD", "A,B"]
-op.map[0x81] = [op_add_a_r2,    "ADD", "A,C"]
-op.map[0x82] = [op_add_a_r2,    "ADD", "A,D"]
-op.map[0x83] = [op_add_a_r2,    "ADD", "A,E"]
-op.map[0x84] = [op_add_a_r2,    "ADD", "A,H"]
-op.map[0x85] = [op_add_a_r2,    "ADD", "A,L"]
-op.map[0x86] = [op_add_a_hlmem, "ADD", "A,(HL)"]
-op.map[0xC6] = [op_add_a_n,     "ADD", "A,n"]
-
-op.map[0x8F] = [op_adc_a_r2,    "ADC", "A,A"]
-op.map[0x88] = [op_adc_a_r2,    "ADC", "A,B"]
-op.map[0x89] = [op_adc_a_r2,    "ADC", "A,C"]
-op.map[0x8A] = [op_adc_a_r2,    "ADC", "A,D"]
-op.map[0x8B] = [op_adc_a_r2,    "ADC", "A,E"]
-op.map[0x8C] = [op_adc_a_r2,    "ADC", "A,H"]
-op.map[0x8D] = [op_adc_a_r2,    "ADC", "A,L"]
-op.map[0x8E] = [op_adc_a_hlmem, "ADC", "A,(HL)"]
-op.map[0xCE] = [op_adc_a_n,     "ADC", "A,n"]
-
-op.map[0x97] = [op_sub_a_r2,    "SUB", "A,A"]
-op.map[0x90] = [op_sub_a_r2,    "SUB", "A,B"]
-op.map[0x91] = [op_sub_a_r2,    "SUB", "A,C"]
-op.map[0x92] = [op_sub_a_r2,    "SUB", "A,D"]
-op.map[0x93] = [op_sub_a_r2,    "SUB", "A,E"]
-op.map[0x94] = [op_sub_a_r2,    "SUB", "A,H"]
-op.map[0x95] = [op_sub_a_r2,    "SUB", "A,L"]
-op.map[0x96] = [op_sub_a_hlmem, "SUB", "A,(HL)"]
-op.map[0xD6] = [op_sub_a_n,     "SUB", "A,n"]
-
-op.map[0x9F] = [op_sbc_a_r2,    "SBC", "A,A"]
-op.map[0x98] = [op_sbc_a_r2,    "SBC", "A,B"]
-op.map[0x99] = [op_sbc_a_r2,    "SBC", "A,C"]
-op.map[0x9A] = [op_sbc_a_r2,    "SBC", "A,D"]
-op.map[0x9B] = [op_sbc_a_r2,    "SBC", "A,E"]
-op.map[0x9C] = [op_sbc_a_r2,    "SBC", "A,H"]
-op.map[0x9D] = [op_sbc_a_r2,    "SBC", "A,L"]
-op.map[0x9E] = [op_sbc_a_hlmem, "SBC", "A,(HL)"]
-op.map[0xDE] = [op_sbc_a_n,     "SBC", "A,n"]
-
-op.map[0xA7] = [op_and_a_r2,    "AND", "A"]
-op.map[0xA0] = [op_and_a_r2,    "AND", "B"]
-op.map[0xA1] = [op_and_a_r2,    "AND", "C"]
-op.map[0xA2] = [op_and_a_r2,    "AND", "D"]
-op.map[0xA3] = [op_and_a_r2,    "AND", "E"]
-op.map[0xA4] = [op_and_a_r2,    "AND", "H"]
-op.map[0xA5] = [op_and_a_r2,    "AND", "L"]
-op.map[0xA6] = [op_and_a_hlmem, "AND", "(HL)"]
-op.map[0xE6] = [op_and_a_n,     "AND", "n"]
-
-op.map[0xB7] = [op_or_a_r2,     "OR", "A"]
-op.map[0xB0] = [op_or_a_r2,     "OR", "B"]
-op.map[0xB1] = [op_or_a_r2,     "OR", "C"]
-op.map[0xB2] = [op_or_a_r2,     "OR", "D"]
-op.map[0xB3] = [op_or_a_r2,     "OR", "E"]
-op.map[0xB4] = [op_or_a_r2,     "OR", "H"]
-op.map[0xB5] = [op_or_a_r2,     "OR", "L"]
-op.map[0xB6] = [op_or_a_hlmem,  "OR", "(HL)"]
-op.map[0xF6] = [op_or_a_n,      "OR", "n"]
-
-op.map[0xAF] = [op_xor_a_r2,    "XOR", "A"]
-op.map[0xA8] = [op_xor_a_r2,    "XOR", "B"]
-op.map[0xA9] = [op_xor_a_r2,    "XOR", "C"]
-op.map[0xAA] = [op_xor_a_r2,    "XOR", "D"]
-op.map[0xAB] = [op_xor_a_r2,    "XOR", "E"]
-op.map[0xAC] = [op_xor_a_r2,    "XOR", "H"]
-op.map[0xAD] = [op_xor_a_r2,    "XOR", "L"]
-op.map[0xAE] = [op_xor_a_hlmem, "XOR", "(HL)"]
-op.map[0xEE] = [op_xor_a_n,     "XOR", "n"]
-
-op.map[0xBF] = [op_cp_a_r2,     "CP", "A"]
-op.map[0xB8] = [op_cp_a_r2,     "CP", "B"]
-op.map[0xB9] = [op_cp_a_r2,     "CP", "C"]
-op.map[0xBA] = [op_cp_a_r2,     "CP", "D"]
-op.map[0xBB] = [op_cp_a_r2,     "CP", "E"]
-op.map[0xBC] = [op_cp_a_r2,     "CP", "H"]
-op.map[0xBD] = [op_cp_a_r2,     "CP", "L"]
-op.map[0xBE] = [op_cp_a_hlmem,  "CP", "(HL)"]
-op.map[0xFE] = [op_cp_a_n,      "CP", "n"]
-
-op.map[0x3C] = [op_inc_r1,      "INC", "A"]
-op.map[0x04] = [op_inc_r1,      "INC", "B"]
-op.map[0x0C] = [op_inc_r1,      "INC", "C"]
-op.map[0x14] = [op_inc_r1,      "INC", "D"]
-op.map[0x1C] = [op_inc_r1,      "INC", "E"]
-op.map[0x24] = [op_inc_r1,      "INC", "H"]
-op.map[0x2C] = [op_inc_r1,      "INC", "L"]
-op.map[0x34] = [op_inc_hlmem,   "INC", "(HL)"]
+op.map_nopref[0x7F] = [op_ld_r1_r2,     "LD", "A,A"]
+op.map_nopref[0x78] = [op_ld_r1_r2,     "LD", "A,B"]
+op.map_nopref[0x79] = [op_ld_r1_r2,     "LD", "A,C"]
+op.map_nopref[0x7A] = [op_ld_r1_r2,     "LD", "A,D"]
+op.map_nopref[0x7B] = [op_ld_r1_r2,     "LD", "A,E"]
+op.map_nopref[0x7C] = [op_ld_r1_r2,     "LD", "A,H"]
+op.map_nopref[0x7D] = [op_ld_r1_r2,     "LD", "A,L"]
+op.map_nopref[0x47] = [op_ld_r1_r2,     "LD", "B,A"]
+op.map_nopref[0x40] = [op_ld_r1_r2,     "LD", "B,B"]
+op.map_nopref[0x41] = [op_ld_r1_r2,     "LD", "B,C"]
+op.map_nopref[0x42] = [op_ld_r1_r2,     "LD", "B,D"]
+op.map_nopref[0x43] = [op_ld_r1_r2,     "LD", "B,E"]
+op.map_nopref[0x44] = [op_ld_r1_r2,     "LD", "B,H"]
+op.map_nopref[0x45] = [op_ld_r1_r2,     "LD", "B,L"]
+op.map_nopref[0x4F] = [op_ld_r1_r2,     "LD", "C,A"]
+op.map_nopref[0x48] = [op_ld_r1_r2,     "LD", "C,B"]
+op.map_nopref[0x49] = [op_ld_r1_r2,     "LD", "C,C"]
+op.map_nopref[0x4A] = [op_ld_r1_r2,     "LD", "C,D"]
+op.map_nopref[0x4B] = [op_ld_r1_r2,     "LD", "C,E"]
+op.map_nopref[0x4C] = [op_ld_r1_r2,     "LD", "C,H"]
+op.map_nopref[0x4D] = [op_ld_r1_r2,     "LD", "C,L"]
+op.map_nopref[0x57] = [op_ld_r1_r2,     "LD", "D,A"]
+op.map_nopref[0x50] = [op_ld_r1_r2,     "LD", "D,B"]
+op.map_nopref[0x51] = [op_ld_r1_r2,     "LD", "D,C"]
+op.map_nopref[0x52] = [op_ld_r1_r2,     "LD", "D,D"]
+op.map_nopref[0x53] = [op_ld_r1_r2,     "LD", "D,E"]
+op.map_nopref[0x54] = [op_ld_r1_r2,     "LD", "D,H"]
+op.map_nopref[0x55] = [op_ld_r1_r2,     "LD", "D,L"]
+op.map_nopref[0x5F] = [op_ld_r1_r2,     "LD", "E,A"]
+op.map_nopref[0x58] = [op_ld_r1_r2,     "LD", "E,B"]
+op.map_nopref[0x59] = [op_ld_r1_r2,     "LD", "E,C"]
+op.map_nopref[0x5A] = [op_ld_r1_r2,     "LD", "E,D"]
+op.map_nopref[0x5B] = [op_ld_r1_r2,     "LD", "E,E"]
+op.map_nopref[0x5C] = [op_ld_r1_r2,     "LD", "E,H"]
+op.map_nopref[0x5D] = [op_ld_r1_r2,     "LD", "E,L"]
+op.map_nopref[0x67] = [op_ld_r1_r2,     "LD", "H,A"]
+op.map_nopref[0x60] = [op_ld_r1_r2,     "LD", "H,B"]
+op.map_nopref[0x61] = [op_ld_r1_r2,     "LD", "H,C"]
+op.map_nopref[0x62] = [op_ld_r1_r2,     "LD", "H,D"]
+op.map_nopref[0x63] = [op_ld_r1_r2,     "LD", "H,E"]
+op.map_nopref[0x64] = [op_ld_r1_r2,     "LD", "H,H"]
+op.map_nopref[0x65] = [op_ld_r1_r2,     "LD", "H,L"] 
+op.map_nopref[0x6F] = [op_ld_r1_r2,     "LD", "L,A"]
+op.map_nopref[0x68] = [op_ld_r1_r2,     "LD", "L,B"]
+op.map_nopref[0x69] = [op_ld_r1_r2,     "LD", "L,C"]
+op.map_nopref[0x6A] = [op_ld_r1_r2,     "LD", "L,D"]
+op.map_nopref[0x6B] = [op_ld_r1_r2,     "LD", "L,E"]
+op.map_nopref[0x6C] = [op_ld_r1_r2,     "LD", "L,H"]
+op.map_nopref[0x6D] = [op_ld_r1_r2,     "LD", "L,L"]
+op.map_nopref[0x3E] = [op_ld_r1_n,      "LD", "A,n"]
+op.map_nopref[0x06] = [op_ld_r1_n,      "LD", "B,n"]
+op.map_nopref[0x0E] = [op_ld_r1_n,      "LD", "C,n"]
+op.map_nopref[0x16] = [op_ld_r1_n,      "LD", "D,n"]
+op.map_nopref[0x1E] = [op_ld_r1_n,      "LD", "E,n"]
+op.map_nopref[0x26] = [op_ld_r1_n,      "LD", "H,n"]
+op.map_nopref[0x2E] = [op_ld_r1_n,      "LD", "L,n"]
+op.map_nopref[0xEA] = [op_ld_nnmem_a,   "LD", "(nn),A"]
+op.map_nopref[0x02] = [op_ld_bcmem_a,   "LD", "(BC),A"]
+op.map_nopref[0x12] = [op_ld_demem_a,   "LD", "(DE),A"]
+op.map_nopref[0x77] = [op_ld_hlmem_r2,  "LD", "(HL),A"]
+op.map_nopref[0x70] = [op_ld_hlmem_r2,  "LD", "(HL),B"]
+op.map_nopref[0x71] = [op_ld_hlmem_r2,  "LD", "(HL),C"]
+op.map_nopref[0x72] = [op_ld_hlmem_r2,  "LD", "(HL),D"]
+op.map_nopref[0x73] = [op_ld_hlmem_r2,  "LD", "(HL),E"]
+op.map_nopref[0x74] = [op_ld_hlmem_r2,  "LD", "(HL),H"]
+op.map_nopref[0x75] = [op_ld_hlmem_r2,  "LD", "(HL),L"]
+op.map_nopref[0x36] = [op_ld_hlmem_n,   "LD", "(HL),n"]
+op.map_nopref[0xFA] = [op_ld_a_nnmem,   "LD", "A,(nn)"]
+op.map_nopref[0x0A] = [op_ld_a_bcmem,   "LD", "A,(BC)"]
+op.map_nopref[0x1A] = [op_ld_a_demem,   "LD", "A,(DE)"]
+op.map_nopref[0x7E] = [op_ld_r1_hlmem,  "LD", "A,(HL)"]
+op.map_nopref[0x46] = [op_ld_r1_hlmem,  "LD", "B,(HL)"]
+op.map_nopref[0x4E] = [op_ld_r1_hlmem,  "LD", "C,(HL)"]
+op.map_nopref[0x56] = [op_ld_r1_hlmem,  "LD", "D,(HL)"]
+op.map_nopref[0x5E] = [op_ld_r1_hlmem,  "LD", "E,(HL)"]
+op.map_nopref[0x66] = [op_ld_r1_hlmem,  "LD", "H,(HL)"]
+op.map_nopref[0x6E] = [op_ld_r1_hlmem,  "LD", "L,(HL)"]
+op.map_nopref[0xF2] = [op_ld_a_ff00c,   "LD", "A,(0xFF00+C)"]
+op.map_nopref[0xE2] = [op_ld_ff00c_a,   "LD", "(0xFF00+C),A"]
+op.map_nopref[0xF0] = [op_ld_a_ff00n,   "LD", "A,(0xFF00+n)"]
+op.map_nopref[0xE0] = [op_ld_ff00n_a,   "LD", "(0xFF00+n),A"]
+op.map_nopref[0x3A] = [op_ldd_a_hlmem,  "LD", "A,(HL-)"]
+op.map_nopref[0x32] = [op_ldd_hlmem_a,  "LD", "(HL-),A"]
+op.map_nopref[0x2A] = [op_ldi_a_hlmem,  "LD", "A,(HL+)"]
+op.map_nopref[0x22] = [op_ldi_hlmem_a,  "LD", "(HL+),A"]
     
-op.map[0x3D] = [op_dec_r1,      "DEC", "A"]
-op.map[0x05] = [op_dec_r1,      "DEC", "B"]
-op.map[0x0D] = [op_dec_r1,      "DEC", "C"]
-op.map[0x15] = [op_dec_r1,      "DEC", "D"]
-op.map[0x1D] = [op_dec_r1,      "DEC", "E"]
-op.map[0x25] = [op_dec_r1,      "DEC", "H"]
-op.map[0x2D] = [op_dec_r1,      "DEC", "L"]
-op.map[0x35] = [op_dec_hlmem,   "DEC", "(HL)"]
+op.map_nopref[0x01] = [op_ld_rp_nn,     "LD", "BC,nn"]
+op.map_nopref[0x11] = [op_ld_rp_nn,     "LD", "DE,nn"]
+op.map_nopref[0x21] = [op_ld_rp_nn,     "LD", "HL,nn"]
+op.map_nopref[0x31] = [op_ld_rp_nn,     "LD", "SP,nn"]
+op.map_nopref[0xF9] = [op_ld_sp_hl,     "LD", "SP,HL"]
+op.map_nopref[0xF8] = [op_ldhl_sp_n,    "LD", "HL,SP+n"]
+op.map_nopref[0x08] = [op_ld_nnmem_sp,  "LD", "(nn),SP"]
+    
+op.map_nopref[0xF5] = [op_push_af,      "PUSH", "AF"]
+op.map_nopref[0xC5] = [op_push_bc,      "PUSH", "BC"]
+op.map_nopref[0xD5] = [op_push_de,      "PUSH", "DE"]
+op.map_nopref[0xE5] = [op_push_hl,      "PUSH", "HL"]
+    
+op.map_nopref[0xF1] = [op_pop_af,       "POP", "AF"]
+op.map_nopref[0xC1] = [op_pop_bc,       "POP", "BC"]
+op.map_nopref[0xD1] = [op_pop_de,       "POP", "DE"]
+op.map_nopref[0xE1] = [op_pop_hl,       "POP", "HL"]
+    
+op.map_nopref[0x87] = [op_add_a_r2,     "ADD", "A,A"]
+op.map_nopref[0x80] = [op_add_a_r2,     "ADD", "A,B"]
+op.map_nopref[0x81] = [op_add_a_r2,     "ADD", "A,C"]
+op.map_nopref[0x82] = [op_add_a_r2,     "ADD", "A,D"]
+op.map_nopref[0x83] = [op_add_a_r2,     "ADD", "A,E"]
+op.map_nopref[0x84] = [op_add_a_r2,     "ADD", "A,H"]
+op.map_nopref[0x85] = [op_add_a_r2,     "ADD", "A,L"]
+op.map_nopref[0x86] = [op_add_a_hlmem,  "ADD", "A,(HL)"]
+op.map_nopref[0xC6] = [op_add_a_n,      "ADD", "A,n"]
+    
+op.map_nopref[0x8F] = [op_adc_a_r2,     "ADC", "A,A"]
+op.map_nopref[0x88] = [op_adc_a_r2,     "ADC", "A,B"]
+op.map_nopref[0x89] = [op_adc_a_r2,     "ADC", "A,C"]
+op.map_nopref[0x8A] = [op_adc_a_r2,     "ADC", "A,D"]
+op.map_nopref[0x8B] = [op_adc_a_r2,     "ADC", "A,E"]
+op.map_nopref[0x8C] = [op_adc_a_r2,     "ADC", "A,H"]
+op.map_nopref[0x8D] = [op_adc_a_r2,     "ADC", "A,L"]
+op.map_nopref[0x8E] = [op_adc_a_hlmem,  "ADC", "A,(HL)"]
+op.map_nopref[0xCE] = [op_adc_a_n,      "ADC", "A,n"]
+    
+op.map_nopref[0x97] = [op_sub_a_r2,     "SUB", "A,A"]
+op.map_nopref[0x90] = [op_sub_a_r2,     "SUB", "A,B"]
+op.map_nopref[0x91] = [op_sub_a_r2,     "SUB", "A,C"]
+op.map_nopref[0x92] = [op_sub_a_r2,     "SUB", "A,D"]
+op.map_nopref[0x93] = [op_sub_a_r2,     "SUB", "A,E"]
+op.map_nopref[0x94] = [op_sub_a_r2,     "SUB", "A,H"]
+op.map_nopref[0x95] = [op_sub_a_r2,     "SUB", "A,L"]
+op.map_nopref[0x96] = [op_sub_a_hlmem,  "SUB", "A,(HL)"]
+op.map_nopref[0xD6] = [op_sub_a_n,      "SUB", "A,n"]
+    
+op.map_nopref[0x9F] = [op_sbc_a_r2,     "SBC", "A,A"]
+op.map_nopref[0x98] = [op_sbc_a_r2,     "SBC", "A,B"]
+op.map_nopref[0x99] = [op_sbc_a_r2,     "SBC", "A,C"]
+op.map_nopref[0x9A] = [op_sbc_a_r2,     "SBC", "A,D"]
+op.map_nopref[0x9B] = [op_sbc_a_r2,     "SBC", "A,E"]
+op.map_nopref[0x9C] = [op_sbc_a_r2,     "SBC", "A,H"]
+op.map_nopref[0x9D] = [op_sbc_a_r2,     "SBC", "A,L"]
+op.map_nopref[0x9E] = [op_sbc_a_hlmem,  "SBC", "A,(HL)"]
+op.map_nopref[0xDE] = [op_sbc_a_n,      "SBC", "A,n"]
+    
+op.map_nopref[0xA7] = [op_and_a_r2,     "AND", "A"]
+op.map_nopref[0xA0] = [op_and_a_r2,     "AND", "B"]
+op.map_nopref[0xA1] = [op_and_a_r2,     "AND", "C"]
+op.map_nopref[0xA2] = [op_and_a_r2,     "AND", "D"]
+op.map_nopref[0xA3] = [op_and_a_r2,     "AND", "E"]
+op.map_nopref[0xA4] = [op_and_a_r2,     "AND", "H"]
+op.map_nopref[0xA5] = [op_and_a_r2,     "AND", "L"]
+op.map_nopref[0xA6] = [op_and_a_hlmem,  "AND", "(HL)"]
+op.map_nopref[0xE6] = [op_and_a_n,      "AND", "n"]
+    
+op.map_nopref[0xB7] = [op_or_a_r2,      "OR", "A"]
+op.map_nopref[0xB0] = [op_or_a_r2,      "OR", "B"]
+op.map_nopref[0xB1] = [op_or_a_r2,      "OR", "C"]
+op.map_nopref[0xB2] = [op_or_a_r2,      "OR", "D"]
+op.map_nopref[0xB3] = [op_or_a_r2,      "OR", "E"]
+op.map_nopref[0xB4] = [op_or_a_r2,      "OR", "H"]
+op.map_nopref[0xB5] = [op_or_a_r2,      "OR", "L"]
+op.map_nopref[0xB6] = [op_or_a_hlmem,   "OR", "(HL)"]
+op.map_nopref[0xF6] = [op_or_a_n,       "OR", "n"]
+    
+op.map_nopref[0xAF] = [op_xor_a_r2,     "XOR", "A"]
+op.map_nopref[0xA8] = [op_xor_a_r2,     "XOR", "B"]
+op.map_nopref[0xA9] = [op_xor_a_r2,     "XOR", "C"]
+op.map_nopref[0xAA] = [op_xor_a_r2,     "XOR", "D"]
+op.map_nopref[0xAB] = [op_xor_a_r2,     "XOR", "E"]
+op.map_nopref[0xAC] = [op_xor_a_r2,     "XOR", "H"]
+op.map_nopref[0xAD] = [op_xor_a_r2,     "XOR", "L"]
+op.map_nopref[0xAE] = [op_xor_a_hlmem,  "XOR", "(HL)"]
+op.map_nopref[0xEE] = [op_xor_a_n,      "XOR", "n"]
+    
+op.map_nopref[0xBF] = [op_cp_a_r2,      "CP", "A"]
+op.map_nopref[0xB8] = [op_cp_a_r2,      "CP", "B"]
+op.map_nopref[0xB9] = [op_cp_a_r2,      "CP", "C"]
+op.map_nopref[0xBA] = [op_cp_a_r2,      "CP", "D"]
+op.map_nopref[0xBB] = [op_cp_a_r2,      "CP", "E"]
+op.map_nopref[0xBC] = [op_cp_a_r2,      "CP", "H"]
+op.map_nopref[0xBD] = [op_cp_a_r2,      "CP", "L"]
+op.map_nopref[0xBE] = [op_cp_a_hlmem,   "CP", "(HL)"]
+op.map_nopref[0xFE] = [op_cp_a_n,       "CP", "n"]
+    
+op.map_nopref[0x3C] = [op_inc_r1,       "INC", "A"]
+op.map_nopref[0x04] = [op_inc_r1,       "INC", "B"]
+op.map_nopref[0x0C] = [op_inc_r1,       "INC", "C"]
+op.map_nopref[0x14] = [op_inc_r1,       "INC", "D"]
+op.map_nopref[0x1C] = [op_inc_r1,       "INC", "E"]
+op.map_nopref[0x24] = [op_inc_r1,       "INC", "H"]
+op.map_nopref[0x2C] = [op_inc_r1,       "INC", "L"]
+op.map_nopref[0x34] = [op_inc_hlmem,    "INC", "(HL)"]
+    
+op.map_nopref[0x3D] = [op_dec_r1,       "DEC", "A"]
+op.map_nopref[0x05] = [op_dec_r1,       "DEC", "B"]
+op.map_nopref[0x0D] = [op_dec_r1,       "DEC", "C"]
+op.map_nopref[0x15] = [op_dec_r1,       "DEC", "D"]
+op.map_nopref[0x1D] = [op_dec_r1,       "DEC", "E"]
+op.map_nopref[0x25] = [op_dec_r1,       "DEC", "H"]
+op.map_nopref[0x2D] = [op_dec_r1,       "DEC", "L"]
+op.map_nopref[0x35] = [op_dec_hlmem,    "DEC", "(HL)"]
+    
+op.map_nopref[0x09] = [op_add_hl_rp,    "ADD", "HL,BC"]
+op.map_nopref[0x19] = [op_add_hl_rp,    "ADD", "HL,DE"]
+op.map_nopref[0x29] = [op_add_hl_rp,    "ADD", "HL,HL"]
+op.map_nopref[0x39] = [op_add_hl_rp,    "ADD", "HL,SP"]
+op.map_nopref[0xE8] = [op_add_sp_n,     "ADD", "SP,n"]
+    
+op.map_nopref[0x03] = [op_inc_rp,       "INC", "BC"]
+op.map_nopref[0x13] = [op_inc_rp,       "INC", "DE"]
+op.map_nopref[0x23] = [op_inc_rp,       "INC", "HL"]
+op.map_nopref[0x33] = [op_inc_rp,       "INC", "SP"]
+    
+op.map_nopref[0x0B] = [op_dec_rp,       "DEC", "BC"]
+op.map_nopref[0x1B] = [op_dec_rp,       "DEC", "DE"]
+op.map_nopref[0x2B] = [op_dec_rp,       "DEC", "HL"]
+op.map_nopref[0x3B] = [op_dec_rp,       "DEC", "SP"]
 
-op.map[0x09] = [op_add_hl_rp,   "ADD", "HL,BC"]
-op.map[0x19] = [op_add_hl_rp,   "ADD", "HL,DE"]
-op.map[0x29] = [op_add_hl_rp,   "ADD", "HL,HL"]
-op.map[0x39] = [op_add_hl_rp,   "ADD", "HL,SP"]
-op.map[0xE8] = [op_add_sp_n,    "ADD", "SP,n"]
+op.map_nopref[0x27] = [op_daa,          "DAA", ""]
+op.map_nopref[0x2F] = [op_cpl,          "CPL", ""]
+op.map_nopref[0x3F] = [op_ccf,          "CCF", ""]
+op.map_nopref[0x37] = [op_scf,          "SCF", ""]
+op.map_nopref[0x00] = [op_nop,          "NOP", ""]
+op.map_nopref[0x76] = [op_halt,         "HALT", ""]
+op.map_nopref[0x10] = [op_stop,         "STOP", ""]
+op.map_nopref[0xF3] = [op_di,           "DI", ""]
 
-op.map[0x03] = [op_inc_rp,      "INC", "BC"]
-op.map[0x13] = [op_inc_rp,      "INC", "DE"]
-op.map[0x23] = [op_inc_rp,      "INC", "HL"]
-op.map[0x33] = [op_inc_rp,      "INC", "SP"]
+op.map_nopref[0x07] = [op_rlc_a,         "RLCA", ""]
+op.map_nopref[0x17] = [op_rl_a,          "RLA", ""]
+op.map_nopref[0x0F] = [op_rrc_a,         "RRCA", ""]
+op.map_nopref[0x1F] = [op_rr_a,          "RRA", ""]
 
-op.map[0x0B] = [op_dec_rp,      "DEC", "BC"]
-op.map[0x1B] = [op_dec_rp,      "DEC", "DE"]
-op.map[0x2B] = [op_dec_rp,      "DEC", "HL"]
-op.map[0x3B] = [op_dec_rp,      "DEC", "SP"]
+### OP MAP (CB-PREFIXED) ###########################################################
+op.map_cbpref = [op_xxx]*256
 
+op.map_cbpref[0x37] = [op_swap_r,       "SWAP", "A"]
+op.map_cbpref[0x30] = [op_swap_r,       "SWAP", "B"]
+op.map_cbpref[0x31] = [op_swap_r,       "SWAP", "C"]
+op.map_cbpref[0x32] = [op_swap_r,       "SWAP", "D"]
+op.map_cbpref[0x33] = [op_swap_r,       "SWAP", "E"]
+op.map_cbpref[0x34] = [op_swap_r,       "SWAP", "H"]
+op.map_cbpref[0x35] = [op_swap_r,       "SWAP", "L"]
+op.map_cbpref[0x36] = [op_swap_hlmem,   "SWAP", "(HL)"]
 
+op.map_cbpref[0x07] = [op_rlc_r,        "RLC", "A"]
+op.map_cbpref[0x00] = [op_rlc_r,        "RLC", "B"]
+op.map_cbpref[0x01] = [op_rlc_r,        "RLC", "C"]
+op.map_cbpref[0x02] = [op_rlc_r,        "RLC", "D"]
+op.map_cbpref[0x03] = [op_rlc_r,        "RLC", "E"]
+op.map_cbpref[0x04] = [op_rlc_r,        "RLC", "H"]
+op.map_cbpref[0x05] = [op_rlc_r,        "RLC", "L"]
+op.map_cbpref[0x06] = [op_rlc_hlmem,    "RLC", "(HL)"]
 
+op.map_cbpref[0x17] = [op_rl_r,         "RL", "A"]
+op.map_cbpref[0x10] = [op_rl_r,         "RL", "B"]
+op.map_cbpref[0x11] = [op_rl_r,         "RL", "C"]
+op.map_cbpref[0x12] = [op_rl_r,         "RL", "D"]
+op.map_cbpref[0x13] = [op_rl_r,         "RL", "E"]
+op.map_cbpref[0x14] = [op_rl_r,         "RL", "H"]
+op.map_cbpref[0x15] = [op_rl_r,         "RL", "L"]
+op.map_cbpref[0x16] = [op_rl_hlmem,     "RL", "(HL)"]
+
+op.map_cbpref[0x0F] = [op_rrc_r,        "RRC", "A"]
+op.map_cbpref[0x08] = [op_rrc_r,        "RRC", "B"]
+op.map_cbpref[0x09] = [op_rrc_r,        "RRC", "C"]
+op.map_cbpref[0x0A] = [op_rrc_r,        "RRC", "D"]
+op.map_cbpref[0x0B] = [op_rrc_r,        "RRC", "E"]
+op.map_cbpref[0x0C] = [op_rrc_r,        "RRC", "H"]
+op.map_cbpref[0x0D] = [op_rrc_r,        "RRC", "L"]
+op.map_cbpref[0x0E] = [op_rrc_hlmem,    "RRC", "(HL)"]
+
+op.map_cbpref[0x1F] = [op_rr_r,         "RR", "A"]
+op.map_cbpref[0x18] = [op_rr_r,         "RR", "B"]
+op.map_cbpref[0x19] = [op_rr_r,         "RR", "C"]
+op.map_cbpref[0x1A] = [op_rr_r,         "RR", "D"]
+op.map_cbpref[0x1B] = [op_rr_r,         "RR", "E"]
+op.map_cbpref[0x1C] = [op_rr_r,         "RR", "H"]
+op.map_cbpref[0x1D] = [op_rr_r,         "RR", "L"]
+op.map_cbpref[0x1E] = [op_rr_hlmem,     "RR", "(HL)"]
 
 
 

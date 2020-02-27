@@ -5,13 +5,16 @@ import code_loader as cld
 
 z80.init()
 
-cld.add_instruction([0x11, 0xFE, 0xFF]) # LD    DE,nn
-cld.add_instruction([0x13])             # INC   DE
-cld.add_instruction([0x13])             # INC   DE
-cld.add_instruction([0x13])             # INC   DE
-cld.add_instruction([0x1B])             # DEC   DE
-cld.add_instruction([0x1B])             # DEC   DE
-cld.add_instruction([0x1B])             # DEC   DE
+cld.add_instruction([0x3E, 0x40])       # LD    A,n
+cld.add_instruction([0x21, 0x04, 0x80]) # LD    HL,nn
+cld.add_instruction([0x77])             # LD    (HL),A
+cld.add_instruction([0xCB, 0x16])       # RL,   (HL)
+cld.add_instruction([0xCB, 0x16])       # RL,   (HL)
+cld.add_instruction([0xCB, 0x16])       # RL,   (HL)
+cld.add_instruction([0xCB, 0x16])       # RL,   (HL)
+cld.add_instruction([0xCB, 0x1E])       # RR,   (HL)
+cld.add_instruction([0xCB, 0x1E])       # RR,   (HL)
+cld.add_instruction([0xCB, 0x1E])       # RR,   (HL)
 
 cld.load_into_memory(0)
 cld.print_code_lines()

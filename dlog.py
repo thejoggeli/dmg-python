@@ -11,6 +11,9 @@ def init():
 def print_error(src, msg):
     print("[ "+src+" ]" + "\tERROR! " + msg)
 
+def print_warning(src, msg):
+    print("[ "+src+" ]" + "\tWARNING! " + msg)
+
 def print_msg(src, msg):
     print("[ "+src+" ]" + "\t" + msg)
     
@@ -45,9 +48,10 @@ def print_z80_op():
     print_msg(
         "Z80", 
         "op_decode\t" + 
-        "0x{0:0{1}X}".format(z80.op.code, 2) + "\t" + 
-        z80.op.name(z80.op.code) + "\t" + 
-        z80.op.params(z80.op.code))
+        "0x"+z80.op.code_str() + "\t" +
+        z80.op.name_str() + "\t" + 
+        z80.op.params_str()
+    )
 
 def print_mem(action, addr, n1, value, n2):
     print_msg(
