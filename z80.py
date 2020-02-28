@@ -1,6 +1,6 @@
 import dlog
 import mem
-
+import gbmath
 
 class OP:
     cycles = 0
@@ -315,9 +315,8 @@ def op_ld_a_demem():
     reg.set_a(mem.read_byte(reg.get_de()))
     op.cycles = 8
 def op_ld_a_nnmem():
-    lsb = mem.read_byte(reg.pc); reg.pc += 1
-    msb = mem.read_byte(reg.pc); reg.pc += 1
-    reg.set_a(mem.read_byte(lsb|(msb<<8)))
+    nn = mem.read_word(reg.pc); reg.pc += 2
+    reg.set_a(mem.read_byte(nn))
     op.cycles = 16
 def op_ld_bcmem_a():
     mem.write_byte(reg.get_bc(), reg.get_a())
@@ -326,9 +325,8 @@ def op_ld_demem_a():
     mem.write_byte(reg.get_de(), reg.get_a())
     op.cycles = 8    
 def op_ld_nnmem_a():
-    lsb = mem.read_byte(reg.pc); reg.pc += 1
-    msb = mem.read_byte(reg.pc); reg.pc += 1
-    mem.write_byte(lsb|(msb<<8), reg.get_a())    
+    nn = mem.read_word(reg.pc); reg.pc += 2
+    mem.write_byte(nn, reg.get_a())    
     op.cycles = 16
 def op_ld_a_ff00c():
     reg.set_a(mem.read_byte(0xFF00|reg.get_c()))
@@ -376,8 +374,7 @@ def op_ld_sp_hl():
     op.cycles = 8
 def op_ldhl_sp_n():
     n = mem.read_byte(reg.pc); reg.pc += 1
-    if(n > 127):
-        n = n-256 # signed
+    n = gbmath.signed_byte(n)
     word = reg.sp + n
     if(word > 0xFFFF):
         word &= 0xFFFF
@@ -871,7 +868,7 @@ def op_rlc_hlmem():
     mem.write_byte(hl, result)
     op.cycles = 16
 def op_rlc_x_helper(s):
-    result = ((s<<1)&0xFF)
+    result = ((s<<1)&0xFF)|((s&0x80)>>7)
     reg.reset_flags()
     if(result == 0):
         reg.set_flag_z()
@@ -898,7 +895,7 @@ def op_rl_hlmem():
     mem.write_byte(hl, result)
     op.cycles = 16
 def op_rl_x_helper(s):
-    result = ((s<<1)&0xFF)+reg.get_flag_c()
+    result = ((s<<1)&0xFF)|(reg.get_flag_c())
     reg.reset_flags()
     if(result == 0):
         reg.set_flag_z()
@@ -925,7 +922,7 @@ def op_rrc_hlmem():
     mem.write_byte(hl, result)
     op.cycles = 16
 def op_rrc_x_helper(s):
-    result = ((s>>1)&0xFF)
+    result = (s>>1)|((s&0x01)<<7)
     reg.reset_flags()
     if(result == 0):
         reg.set_flag_z()
@@ -952,7 +949,7 @@ def op_rr_hlmem():
     mem.write_byte(hl, result)
     op.cycles = 16
 def op_rr_x_helper(s):
-    result = ((s>>1)&0xFF)+(reg.get_flag_c()<<7)
+    result = (s>>1)|(reg.get_flag_c()<<7)
     reg.reset_flags()
     if(result == 0):
         reg.set_flag_z()
@@ -960,6 +957,229 @@ def op_rr_x_helper(s):
         reg.set_flag_c()
     return result
     
+### OP SLA #########################################################################
+def op_sla_r():
+    r = (op.code >> 0)&0x07 #z
+    s = reg.get_r(r)
+    result = op_sla_x_helper(s)
+    reg.set_r(r, result)
+    op.cycles = 8
+def op_sla_hlmem():
+    hl = reg.get_hl()
+    s = mem.read_byte(hl)
+    result = op_sla_x_helper(s)
+    mem.write_byte(hl, result)
+    op.cycles = 16
+def op_sla_x_helper(s):
+    result = (s<<1)&0xFE
+    reg.reset_flags()
+    if(result == 0):
+        reg.set_flag_z()     
+    if(s&0x80):
+        reg.set_flag_c()   
+    return result
+
+### OP SRA ########################################################################
+def op_sra_r():
+    r = (op.code >> 0)&0x07 #z
+    s = reg.get_r(r)
+    result = op_sra_x_helper(s)
+    reg.set_r(r, result)
+    op.cycles = 8
+def op_sra_hlmem():
+    hl = reg.get_hl()
+    s = mem.read_byte(hl)
+    result = op_sra_x_helper(s)
+    mem.write_byte(hl, result)
+    op.cycles = 16
+def op_sra_x_helper(s):
+    result = (s&0x80)|((s>>1)&0x7F)
+    reg.reset_flags()
+    if(result == 0):
+        reg.set_flag_z()     
+    if(s&0x01):
+        reg.set_flag_c()   
+    return result
+
+### OP SRL ########################################################################
+def op_srl_r():
+    r = (op.code >> 0)&0x07 #z
+    s = reg.get_r(r)
+    result = op_srl_x_helper(s)
+    reg.set_r(r, result)
+    op.cycles = 8
+def op_srl_hlmem():
+    hl = reg.get_hl()
+    s = mem.read_byte(hl)
+    result = op_srl_x_helper(s)
+    mem.write_byte(hl, result)
+    op.cycles = 16
+def op_srl_x_helper(s):
+    result = ((s>>1)&0x7F)
+    reg.reset_flags()
+    if(result == 0):
+        reg.set_flag_z()     
+    if(s&0x01):
+        reg.set_flag_c()   
+    return result
+    
+### OP BIT #########################################################################
+def op_bit_r():
+    s = reg.get_r((op.code >> 0)&0x07) #z
+    b = (op.code >> 3)&0x07 #y
+    op_bit_x_helper(s,b)
+    op.cycles = 8
+def op_bit_hlmem():
+    s = mem.read_byte(reg.get_hl())
+    b = (op.code >> 3)&0x07 #y
+    op_bit_x_helper(s,b)
+    op.cycles = 16
+def op_bit_x_helper(s,b):
+    if(s&(0x01<<b)==0):
+        reg.set_flag_z()
+    else:
+        reg.reset_flag_z()
+    reg.reset_flag_n()
+    reg.set_flag_h()
+    
+### OP SET #########################################################################
+def op_set_r():
+    r = (op.code >> 0)&0x07 #z
+    s = reg.get_r(r) 
+    b = (op.code >> 3)&0x07 #y
+    reg.set_r(r, s|(0x01<<b))
+    op.cycles = 8
+def op_set_hlmem():
+    hl = reg.get_hl()
+    s = mem.read_byte(hl)
+    b = (op.code >> 3)&0x07 #y
+    mem.write_byte(hl, s|(0x01<<b))
+    op.cycles = 16
+    
+### OP RES #########################################################################
+def op_res_r():
+    r = (op.code >> 0)&0x07 #z
+    s = reg.get_r(r) 
+    b = (op.code >> 3)&0x07 #y
+    reg.set_r(r, s&(~(0x01<<b)))
+    op.cycles = 8
+def op_res_hlmem():
+    hl = reg.get_hl()
+    s = mem.read_byte(hl)
+    b = (op.code >> 3)&0x07 #y
+    mem.write_byte(hl, s&(~(0x01<<b)))
+    op.cycles = 16
+
+### OP JP ##########################################################################
+def op_jp_nn():
+    reg.pc = mem.read_word(reg.pc)
+    op.cycles = 12
+def op_jp_nz_nn():
+    if(not reg.get_flag_z()):
+        reg.pc = mem.read_word(reg.pc)
+    else:
+        reg.pc += 2
+    op.cycles = 12
+def op_jp_z_nn():
+    if(reg.get_flag_z()):
+        reg.pc = mem.read_word(reg.pc)
+    else:
+        reg.pc += 2
+    op.cycles = 12
+def op_jp_nc_nn():
+    if(not reg.get_flag_c()):
+        reg.pc = mem.read_word(reg.pc)
+    else:
+        reg.pc += 2
+    op.cycles = 12
+def op_jp_c_nn():
+    if(reg.get_flag_c()):
+        reg.pc = mem.read_word(reg.pc)
+    else:
+        reg.pc += 2
+    op.cycles = 12
+def op_jp_hl():
+    reg.pc = reg.get_hl()
+    op.cycles = 4
+    
+### OP JR ##########################################################################
+def op_jr_n():
+    n = mem.read_byte(reg.pc);
+    n = gbmath.signed_byte(n)
+    reg.pc = reg.pc+n+1
+    op.cycles = 8
+def op_jr_nz_n():
+    if(not reg.get_flag_z()):    
+        n = mem.read_byte(reg.pc);
+        n = gbmath.signed_byte(n)
+        reg.pc = reg.pc+n+1
+    else:
+        reg.pc += 1
+    op.cycles = 8
+def op_jr_z_n():
+    if(reg.get_flag_z()):    
+        n = mem.read_byte(reg.pc);
+        n = gbmath.signed_byte(n)
+        reg.pc = reg.pc+n+1
+    else:
+        reg.pc += 1
+    op.cycles = 8
+def op_jr_nc_n():
+    if(not reg.get_flag_c()):    
+        n = mem.read_byte(reg.pc);
+        n = gbmath.signed_byte(n)
+        reg.pc = reg.pc+n+1
+    else:
+        reg.pc += 1
+    op.cycles = 8
+def op_jr_c_n():
+    if(reg.get_flag_c()):    
+        n = mem.read_byte(reg.pc);
+        n = gbmath.signed_byte(n)
+        reg.pc = reg.pc+n+1
+    else:
+        reg.pc += 1
+    op.cycles = 8
+
+### OP CALL ########################################################################
+def op_call_nn():
+    nn = mem.read_word(reg.pc); reg.pc += 2
+    reg.sp -= 2; mem.write_word(reg.sp, reg.pc)
+    reg.pc = nn
+    op.cycles = 12
+def op_call_nz_nn():
+    if(not reg.get_flag_z()): 
+        nn = mem.read_word(reg.pc); reg.pc += 2
+        reg.sp -= 2; mem.write_word(reg.sp, reg.pc)
+        reg.pc = nn
+    else:
+        reg.pc += 2
+    op.cycles = 12
+def op_call_z_nn():
+    if(reg.get_flag_z()): 
+        nn = mem.read_word(reg.pc); reg.pc += 2
+        reg.sp -= 2; mem.write_word(reg.sp, reg.pc)
+        reg.pc = nn
+    else:
+        reg.pc += 2
+    op.cycles = 12
+def op_call_nc_nn():
+    if(not reg.get_flag_c()): 
+        nn = mem.read_word(reg.pc); reg.pc += 2
+        reg.sp -= 2; mem.write_word(reg.sp, reg.pc)
+        reg.pc = nn
+    else:
+        reg.pc += 2
+    op.cycles = 12
+def op_call_c_nn():
+    if(reg.get_flag_c()): 
+        nn = mem.read_word(reg.pc); reg.pc += 2
+        reg.sp -= 2; mem.write_word(reg.sp, reg.pc)
+        reg.pc = nn
+    else:
+        reg.pc += 2
+    op.cycles = 12
+
 ### OP XXX #########################################################################
 def op_xxx():
     dlog.print_error("Z80", "invalid opcode " + hex(op.code) + " at " +  hex(reg.pc-1))
@@ -1194,10 +1414,30 @@ op.map_nopref[0x76] = [op_halt,         "HALT", ""]
 op.map_nopref[0x10] = [op_stop,         "STOP", ""]
 op.map_nopref[0xF3] = [op_di,           "DI", ""]
 
-op.map_nopref[0x07] = [op_rlc_a,         "RLCA", ""]
-op.map_nopref[0x17] = [op_rl_a,          "RLA", ""]
-op.map_nopref[0x0F] = [op_rrc_a,         "RRCA", ""]
-op.map_nopref[0x1F] = [op_rr_a,          "RRA", ""]
+op.map_nopref[0x07] = [op_rlc_a,        "RLCA", ""]
+op.map_nopref[0x17] = [op_rl_a,         "RLA", ""]
+op.map_nopref[0x0F] = [op_rrc_a,        "RRCA", ""]
+op.map_nopref[0x1F] = [op_rr_a,         "RRA", ""]
+op.map_nopref[0x1F] = [op_rr_a,         "RRA", ""]
+
+op.map_nopref[0xC3] = [op_jp_nn,        "JP", "nn"]
+op.map_nopref[0xC2] = [op_jp_nz_nn,     "JP", "NZ,nn"]
+op.map_nopref[0xCA] = [op_jp_z_nn,      "JP", "Z,nn"]
+op.map_nopref[0xD2] = [op_jp_nc_nn,     "JP", "NC,nn"]
+op.map_nopref[0xDA] = [op_jp_c_nn,      "JP", "C,nn"]
+op.map_nopref[0xE9] = [op_jp_hl,        "JP", "(HL)"]
+
+op.map_nopref[0x18] = [op_jr_n,         "JR", "n"]
+op.map_nopref[0x20] = [op_jr_nz_n,      "JR", "NZ,n"]
+op.map_nopref[0x28] = [op_jr_z_n,       "JR", "Z,n"]
+op.map_nopref[0x30] = [op_jr_nc_n,      "JR", "NC,n"]
+op.map_nopref[0x38] = [op_jr_c_n,       "JR", "C,n"]
+
+op.map_nopref[0xCD] = [op_call_nn,      "CALL", "nn"]
+op.map_nopref[0xC4] = [op_call_nz_nn,   "CALL", "NZ,nn"]
+op.map_nopref[0xCC] = [op_call_z_nn,    "CALL", "Z,nn"]
+op.map_nopref[0xD4] = [op_call_nc_nn,   "CALL", "NC,nn"]
+op.map_nopref[0xDC] = [op_call_c_nn,    "CALL", "C,nn"]
 
 ### OP MAP (CB-PREFIXED) ###########################################################
 op.map_cbpref = [op_xxx]*256
@@ -1247,6 +1487,227 @@ op.map_cbpref[0x1C] = [op_rr_r,         "RR", "H"]
 op.map_cbpref[0x1D] = [op_rr_r,         "RR", "L"]
 op.map_cbpref[0x1E] = [op_rr_hlmem,     "RR", "(HL)"]
 
+op.map_cbpref[0x27] = [op_sla_r,        "SLA", "A"]
+op.map_cbpref[0x20] = [op_sla_r,        "SLA", "B"]
+op.map_cbpref[0x21] = [op_sla_r,        "SLA", "C"]
+op.map_cbpref[0x22] = [op_sla_r,        "SLA", "D"]
+op.map_cbpref[0x23] = [op_sla_r,        "SLA", "E"]
+op.map_cbpref[0x24] = [op_sla_r,        "SLA", "H"]
+op.map_cbpref[0x25] = [op_sla_r,        "SLA", "L"]
+op.map_cbpref[0x26] = [op_sla_hlmem,    "SLA", "(HL)"]
+    
+op.map_cbpref[0x2F] = [op_sra_r,        "SRA", "A"]
+op.map_cbpref[0x28] = [op_sra_r,        "SRA", "B"]
+op.map_cbpref[0x29] = [op_sra_r,        "SRA", "C"]
+op.map_cbpref[0x2A] = [op_sra_r,        "SRA", "D"]
+op.map_cbpref[0x2B] = [op_sra_r,        "SRA", "E"]
+op.map_cbpref[0x2C] = [op_sra_r,        "SRA", "H"]
+op.map_cbpref[0x2D] = [op_sra_r,        "SRA", "L"]
+op.map_cbpref[0x2E] = [op_sra_hlmem,    "SRA", "(HL)"]
+    
+op.map_cbpref[0x3F] = [op_srl_r,        "SRL", "A"]
+op.map_cbpref[0x38] = [op_srl_r,        "SRL", "B"]
+op.map_cbpref[0x39] = [op_srl_r,        "SRL", "C"]
+op.map_cbpref[0x3A] = [op_srl_r,        "SRL", "D"]
+op.map_cbpref[0x3B] = [op_srl_r,        "SRL", "E"]
+op.map_cbpref[0x3C] = [op_srl_r,        "SRL", "H"]
+op.map_cbpref[0x3D] = [op_srl_r,        "SRL", "L"]
+op.map_cbpref[0x3E] = [op_srl_hlmem,    "SRL", "(HL)"]
+
+op.map_cbpref[0x47] = [op_bit_r,        "BIT", "0,A"]
+op.map_cbpref[0x40] = [op_bit_r,        "BIT", "0,B"]
+op.map_cbpref[0x41] = [op_bit_r,        "BIT", "0,C"]
+op.map_cbpref[0x42] = [op_bit_r,        "BIT", "0,D"]
+op.map_cbpref[0x43] = [op_bit_r,        "BIT", "0,E"]
+op.map_cbpref[0x44] = [op_bit_r,        "BIT", "0,H"]
+op.map_cbpref[0x45] = [op_bit_r,        "BIT", "0,L"]
+op.map_cbpref[0x46] = [op_bit_hlmem,    "BIT", "0,(HL)"]
+op.map_cbpref[0x4F] = [op_bit_r,        "BIT", "1,A"]
+op.map_cbpref[0x48] = [op_bit_r,        "BIT", "1,B"]
+op.map_cbpref[0x49] = [op_bit_r,        "BIT", "1,C"]
+op.map_cbpref[0x4A] = [op_bit_r,        "BIT", "1,D"]
+op.map_cbpref[0x4B] = [op_bit_r,        "BIT", "1,E"]
+op.map_cbpref[0x4C] = [op_bit_r,        "BIT", "1,H"]
+op.map_cbpref[0x4D] = [op_bit_r,        "BIT", "1,L"]
+op.map_cbpref[0x4E] = [op_bit_hlmem,    "BIT", "1,(HL)"]
+op.map_cbpref[0x57] = [op_bit_r,        "BIT", "2,A"]
+op.map_cbpref[0x50] = [op_bit_r,        "BIT", "2,B"]
+op.map_cbpref[0x51] = [op_bit_r,        "BIT", "2,C"]
+op.map_cbpref[0x52] = [op_bit_r,        "BIT", "2,D"]
+op.map_cbpref[0x53] = [op_bit_r,        "BIT", "2,E"]
+op.map_cbpref[0x54] = [op_bit_r,        "BIT", "2,H"]
+op.map_cbpref[0x55] = [op_bit_r,        "BIT", "2,L"]
+op.map_cbpref[0x56] = [op_bit_hlmem,    "BIT", "2,(HL)"]
+op.map_cbpref[0x5F] = [op_bit_r,        "BIT", "3,A"]
+op.map_cbpref[0x58] = [op_bit_r,        "BIT", "3,B"]
+op.map_cbpref[0x59] = [op_bit_r,        "BIT", "3,C"]
+op.map_cbpref[0x5A] = [op_bit_r,        "BIT", "3,D"]
+op.map_cbpref[0x5B] = [op_bit_r,        "BIT", "3,E"]
+op.map_cbpref[0x5C] = [op_bit_r,        "BIT", "3,H"]
+op.map_cbpref[0x5D] = [op_bit_r,        "BIT", "3,L"]
+op.map_cbpref[0x5E] = [op_bit_hlmem,    "BIT", "3,(HL)"]
+op.map_cbpref[0x67] = [op_bit_r,        "BIT", "4,A"]
+op.map_cbpref[0x60] = [op_bit_r,        "BIT", "4,B"]
+op.map_cbpref[0x61] = [op_bit_r,        "BIT", "4,C"]
+op.map_cbpref[0x62] = [op_bit_r,        "BIT", "4,D"]
+op.map_cbpref[0x63] = [op_bit_r,        "BIT", "4,E"]
+op.map_cbpref[0x64] = [op_bit_r,        "BIT", "4,H"]
+op.map_cbpref[0x65] = [op_bit_r,        "BIT", "4,L"]
+op.map_cbpref[0x66] = [op_bit_hlmem,    "BIT", "4,(HL)"]
+op.map_cbpref[0x6F] = [op_bit_r,        "BIT", "5,A"]
+op.map_cbpref[0x68] = [op_bit_r,        "BIT", "5,B"]
+op.map_cbpref[0x69] = [op_bit_r,        "BIT", "5,C"]
+op.map_cbpref[0x6A] = [op_bit_r,        "BIT", "5,D"]
+op.map_cbpref[0x6B] = [op_bit_r,        "BIT", "5,E"]
+op.map_cbpref[0x6C] = [op_bit_r,        "BIT", "5,H"]
+op.map_cbpref[0x6D] = [op_bit_r,        "BIT", "5,L"]
+op.map_cbpref[0x6E] = [op_bit_hlmem,    "BIT", "5,(HL)"]
+op.map_cbpref[0x77] = [op_bit_r,        "BIT", "6,A"]
+op.map_cbpref[0x70] = [op_bit_r,        "BIT", "6,B"]
+op.map_cbpref[0x71] = [op_bit_r,        "BIT", "6,C"]
+op.map_cbpref[0x72] = [op_bit_r,        "BIT", "6,D"]
+op.map_cbpref[0x73] = [op_bit_r,        "BIT", "6,E"]
+op.map_cbpref[0x74] = [op_bit_r,        "BIT", "6,H"]
+op.map_cbpref[0x75] = [op_bit_r,        "BIT", "6,L"]
+op.map_cbpref[0x76] = [op_bit_hlmem,    "BIT", "6,(HL)"]
+op.map_cbpref[0x7F] = [op_bit_r,        "BIT", "7,A"]
+op.map_cbpref[0x78] = [op_bit_r,        "BIT", "7,B"]
+op.map_cbpref[0x79] = [op_bit_r,        "BIT", "7,C"]
+op.map_cbpref[0x7A] = [op_bit_r,        "BIT", "7,D"]
+op.map_cbpref[0x7B] = [op_bit_r,        "BIT", "7,E"]
+op.map_cbpref[0x7C] = [op_bit_r,        "BIT", "7,H"]
+op.map_cbpref[0x7D] = [op_bit_r,        "BIT", "7,L"]
+op.map_cbpref[0x7E] = [op_bit_hlmem,    "BIT", "7,(HL)"]
+
+op.map_cbpref[0xC7] = [op_set_r,        "SET", "0,A"]
+op.map_cbpref[0xC0] = [op_set_r,        "SET", "0,B"]
+op.map_cbpref[0xC1] = [op_set_r,        "SET", "0,C"]
+op.map_cbpref[0xC2] = [op_set_r,        "SET", "0,D"]
+op.map_cbpref[0xC3] = [op_set_r,        "SET", "0,E"]
+op.map_cbpref[0xC4] = [op_set_r,        "SET", "0,H"]
+op.map_cbpref[0xC5] = [op_set_r,        "SET", "0,L"]
+op.map_cbpref[0xC6] = [op_set_hlmem,    "SET", "0,(HL)"]
+op.map_cbpref[0xCF] = [op_set_r,        "SET", "1,A"]
+op.map_cbpref[0xC8] = [op_set_r,        "SET", "1,B"]
+op.map_cbpref[0xC9] = [op_set_r,        "SET", "1,C"]
+op.map_cbpref[0xCA] = [op_set_r,        "SET", "1,D"]
+op.map_cbpref[0xCB] = [op_set_r,        "SET", "1,E"]
+op.map_cbpref[0xCC] = [op_set_r,        "SET", "1,H"]
+op.map_cbpref[0xCD] = [op_set_r,        "SET", "1,L"]
+op.map_cbpref[0xCE] = [op_set_hlmem,    "SET", "1,(HL)"]
+op.map_cbpref[0xD7] = [op_set_r,        "SET", "2,A"]
+op.map_cbpref[0xD0] = [op_set_r,        "SET", "2,B"]
+op.map_cbpref[0xD1] = [op_set_r,        "SET", "2,C"]
+op.map_cbpref[0xD2] = [op_set_r,        "SET", "2,D"]
+op.map_cbpref[0xD3] = [op_set_r,        "SET", "2,E"]
+op.map_cbpref[0xD4] = [op_set_r,        "SET", "2,H"]
+op.map_cbpref[0xD5] = [op_set_r,        "SET", "2,L"]
+op.map_cbpref[0xD6] = [op_set_hlmem,    "SET", "2,(HL)"]
+op.map_cbpref[0xDF] = [op_set_r,        "SET", "3,A"]
+op.map_cbpref[0xD8] = [op_set_r,        "SET", "3,B"]
+op.map_cbpref[0xD9] = [op_set_r,        "SET", "3,C"]
+op.map_cbpref[0xDA] = [op_set_r,        "SET", "3,D"]
+op.map_cbpref[0xDB] = [op_set_r,        "SET", "3,E"]
+op.map_cbpref[0xDC] = [op_set_r,        "SET", "3,H"]
+op.map_cbpref[0xDD] = [op_set_r,        "SET", "3,L"]
+op.map_cbpref[0xDE] = [op_set_hlmem,    "SET", "3,(HL)"]
+op.map_cbpref[0xE7] = [op_set_r,        "SET", "4,A"]
+op.map_cbpref[0xE0] = [op_set_r,        "SET", "4,B"]
+op.map_cbpref[0xE1] = [op_set_r,        "SET", "4,C"]
+op.map_cbpref[0xE2] = [op_set_r,        "SET", "4,D"]
+op.map_cbpref[0xE3] = [op_set_r,        "SET", "4,E"]
+op.map_cbpref[0xE4] = [op_set_r,        "SET", "4,H"]
+op.map_cbpref[0xE5] = [op_set_r,        "SET", "4,L"]
+op.map_cbpref[0xE6] = [op_set_hlmem,    "SET", "4,(HL)"]
+op.map_cbpref[0xEF] = [op_set_r,        "SET", "5,A"]
+op.map_cbpref[0xE8] = [op_set_r,        "SET", "5,B"]
+op.map_cbpref[0xE9] = [op_set_r,        "SET", "5,C"]
+op.map_cbpref[0xEA] = [op_set_r,        "SET", "5,D"]
+op.map_cbpref[0xEB] = [op_set_r,        "SET", "5,E"]
+op.map_cbpref[0xEC] = [op_set_r,        "SET", "5,H"]
+op.map_cbpref[0xED] = [op_set_r,        "SET", "5,L"]
+op.map_cbpref[0xEE] = [op_set_hlmem,    "SET", "5,(HL)"]
+op.map_cbpref[0xF7] = [op_set_r,        "SET", "6,A"]
+op.map_cbpref[0xF0] = [op_set_r,        "SET", "6,B"]
+op.map_cbpref[0xF1] = [op_set_r,        "SET", "6,C"]
+op.map_cbpref[0xF2] = [op_set_r,        "SET", "6,D"]
+op.map_cbpref[0xF3] = [op_set_r,        "SET", "6,E"]
+op.map_cbpref[0xF4] = [op_set_r,        "SET", "6,H"]
+op.map_cbpref[0xF5] = [op_set_r,        "SET", "6,L"]
+op.map_cbpref[0xF6] = [op_set_hlmem,    "SET", "6,(HL)"]
+op.map_cbpref[0xFF] = [op_set_r,        "SET", "7,A"]
+op.map_cbpref[0xF8] = [op_set_r,        "SET", "7,B"]
+op.map_cbpref[0xF9] = [op_set_r,        "SET", "7,C"]
+op.map_cbpref[0xFA] = [op_set_r,        "SET", "7,D"]
+op.map_cbpref[0xFB] = [op_set_r,        "SET", "7,E"]
+op.map_cbpref[0xFC] = [op_set_r,        "SET", "7,H"]
+op.map_cbpref[0xFD] = [op_set_r,        "SET", "7,L"]
+op.map_cbpref[0xFE] = [op_set_hlmem,    "SET", "7,(HL)"]
+
+op.map_cbpref[0x87] = [op_res_r,        "RES", "0,A"]
+op.map_cbpref[0x80] = [op_res_r,        "RES", "0,B"]
+op.map_cbpref[0x81] = [op_res_r,        "RES", "0,C"]
+op.map_cbpref[0x82] = [op_res_r,        "RES", "0,D"]
+op.map_cbpref[0x83] = [op_res_r,        "RES", "0,E"]
+op.map_cbpref[0x84] = [op_res_r,        "RES", "0,H"]
+op.map_cbpref[0x85] = [op_res_r,        "RES", "0,L"]
+op.map_cbpref[0x86] = [op_res_hlmem,    "RES", "0,(HL)"]
+op.map_cbpref[0x8F] = [op_res_r,        "RES", "1,A"]
+op.map_cbpref[0x88] = [op_res_r,        "RES", "1,B"]
+op.map_cbpref[0x89] = [op_res_r,        "RES", "1,C"]
+op.map_cbpref[0x8A] = [op_res_r,        "RES", "1,D"]
+op.map_cbpref[0x8B] = [op_res_r,        "RES", "1,E"]
+op.map_cbpref[0x8C] = [op_res_r,        "RES", "1,H"]
+op.map_cbpref[0x8D] = [op_res_r,        "RES", "1,L"]
+op.map_cbpref[0x8E] = [op_res_hlmem,    "RES", "1,(HL)"]
+op.map_cbpref[0x97] = [op_res_r,        "RES", "2,A"]
+op.map_cbpref[0x90] = [op_res_r,        "RES", "2,B"]
+op.map_cbpref[0x91] = [op_res_r,        "RES", "2,C"]
+op.map_cbpref[0x92] = [op_res_r,        "RES", "2,D"]
+op.map_cbpref[0x93] = [op_res_r,        "RES", "2,E"]
+op.map_cbpref[0x94] = [op_res_r,        "RES", "2,H"]
+op.map_cbpref[0x95] = [op_res_r,        "RES", "2,L"]
+op.map_cbpref[0x96] = [op_res_hlmem,    "RES", "2,(HL)"]
+op.map_cbpref[0x9F] = [op_res_r,        "RES", "3,A"]
+op.map_cbpref[0x98] = [op_res_r,        "RES", "3,B"]
+op.map_cbpref[0x99] = [op_res_r,        "RES", "3,C"]
+op.map_cbpref[0x9A] = [op_res_r,        "RES", "3,D"]
+op.map_cbpref[0x9B] = [op_res_r,        "RES", "3,E"]
+op.map_cbpref[0x9C] = [op_res_r,        "RES", "3,H"]
+op.map_cbpref[0x9D] = [op_res_r,        "RES", "3,L"]
+op.map_cbpref[0x9E] = [op_res_hlmem,    "RES", "3,(HL)"]
+op.map_cbpref[0xA7] = [op_res_r,        "RES", "4,A"]
+op.map_cbpref[0xA0] = [op_res_r,        "RES", "4,B"]
+op.map_cbpref[0xA1] = [op_res_r,        "RES", "4,C"]
+op.map_cbpref[0xA2] = [op_res_r,        "RES", "4,D"]
+op.map_cbpref[0xA3] = [op_res_r,        "RES", "4,E"]
+op.map_cbpref[0xA4] = [op_res_r,        "RES", "4,H"]
+op.map_cbpref[0xA5] = [op_res_r,        "RES", "4,L"]
+op.map_cbpref[0xA6] = [op_res_hlmem,    "RES", "4,(HL)"]
+op.map_cbpref[0xAF] = [op_res_r,        "RES", "5,A"]
+op.map_cbpref[0xA8] = [op_res_r,        "RES", "5,B"]
+op.map_cbpref[0xA9] = [op_res_r,        "RES", "5,C"]
+op.map_cbpref[0xAA] = [op_res_r,        "RES", "5,D"]
+op.map_cbpref[0xAB] = [op_res_r,        "RES", "5,E"]
+op.map_cbpref[0xAC] = [op_res_r,        "RES", "5,H"]
+op.map_cbpref[0xAD] = [op_res_r,        "RES", "5,L"]
+op.map_cbpref[0xAE] = [op_res_hlmem,    "RES", "5,(HL)"]
+op.map_cbpref[0xB7] = [op_res_r,        "RES", "6,A"]
+op.map_cbpref[0xB0] = [op_res_r,        "RES", "6,B"]
+op.map_cbpref[0xB1] = [op_res_r,        "RES", "6,C"]
+op.map_cbpref[0xB2] = [op_res_r,        "RES", "6,D"]
+op.map_cbpref[0xB3] = [op_res_r,        "RES", "6,E"]
+op.map_cbpref[0xB4] = [op_res_r,        "RES", "6,H"]
+op.map_cbpref[0xB5] = [op_res_r,        "RES", "6,L"]
+op.map_cbpref[0xB6] = [op_res_hlmem,    "RES", "6,(HL)"]
+op.map_cbpref[0xBF] = [op_res_r,        "RES", "7,A"]
+op.map_cbpref[0xB8] = [op_res_r,        "RES", "7,B"]
+op.map_cbpref[0xB9] = [op_res_r,        "RES", "7,C"]
+op.map_cbpref[0xBA] = [op_res_r,        "RES", "7,D"]
+op.map_cbpref[0xBB] = [op_res_r,        "RES", "7,E"]
+op.map_cbpref[0xBC] = [op_res_r,        "RES", "7,H"]
+op.map_cbpref[0xBD] = [op_res_r,        "RES", "7,L"]
+op.map_cbpref[0xBE] = [op_res_hlmem,    "RES", "7,(HL)"]
 
 
 
