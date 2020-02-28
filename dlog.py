@@ -1,23 +1,37 @@
 import z80
 import mem
 
+LEVEL_ALL = 20
+LEVEL_WARNING = 10
+LEVEL_ERROR = 0
+
+level = LEVEL_ALL
+silent = False
 enable_z80 = True
 enable_mem_read = True
 enable_mem_write = True
 
 def init():
-    print_msg("LOG", "init")
+    pass
 
 def print_error(src, msg):
+    if(level < LEVEL_ERROR):
+        return
     print("[ "+src+" ]" + "\tERROR! " + msg)
 
 def print_warning(src, msg):
+    if(level < LEVEL_WARNING):
+        return
     print("[ "+src+" ]" + "\tWARNING! " + msg)
 
 def print_msg(src, msg):
+    if(level < LEVEL_ALL):
+        return
     print("[ "+src+" ]" + "\t" + msg)
     
 def print_z80_st():
+    if(level < LEVEL_ALL):
+        return
     print_msg(
         "Z80",
         "registers\t"
@@ -26,8 +40,10 @@ def print_z80_st():
         "D="  + "0x{0:0{1}X}".format(z80.reg.d, 2) + "\t" +
         "H="  + "0x{0:0{1}X}".format(z80.reg.h, 2) + "\t" +
         "A="  + "0x{0:0{1}X}".format(z80.reg.a, 2) + "\t" +
-        "Z N H C" + "\t\t" +
-        "Cycles"
+        "Z N H C" +
+        "Step".rjust(13, " ") +
+        "Cycles".rjust(13, " ") +
+        "Time".rjust(10, " ")
     )
     print_msg(
         "Z80",
@@ -40,20 +56,34 @@ def print_z80_st():
         str(z80.reg.get_flag_z()) + " " +
         str(z80.reg.get_flag_n()) + " " +
         str(z80.reg.get_flag_h()) + " " +
-        str(z80.reg.get_flag_c()) + "\t\t" +
-        str(z80.cycles)
+        str(z80.reg.get_flag_c()) +
+        str(z80.state.step_nr).rjust(13, " ") +
+        str(z80.state.cycles_total).rjust(13, " ") +
+        "{0:.2f}".format(round(z80.state.time_passed, 2),2).rjust(10, " ")
     )
     
 def print_z80_op():
-    print_msg(
-        "Z80", 
-        "op_decode\t" + 
-        "0x"+z80.op.code_str() + "\t" +
-        z80.op.name_str() + "\t" + 
-        z80.op.params_str()
-    )
+    if(level < LEVEL_ALL):
+        return
+    info = z80.op.get_opcode_info(z80.op.prefix, z80.op.code)
+    size = info[z80.OPCODE_INFO_SIZE]
+    
+    msg = ""
+    msg += "op_decode\t"
+    msg += "0x{0:0{1}X}".format(z80.op.prefix, 2) + "{0:0{1}X}".format(z80.op.code, 2) + "\t"
+    msg += info[z80.OPCODE_INFO_NAME] + "\t"
+    msg += info[z80.OPCODE_INFO_PARAMS]
+    
+    params_offset = 1 if z80.op.prefix == 0x00 else 2    
+    for i in range(params_offset, size):
+        param = mem.read_byte(z80.op.address+i, silent=True)
+        msg += "\t" + "0x{0:0{1}X}".format(param,2)           
+        
+    print_msg("Z80", msg)
 
 def print_mem(action, addr, n1, value, n2):
+    if(level < LEVEL_ALL):
+        return
     print_msg(
         "MEM",
         action + "\t" + 

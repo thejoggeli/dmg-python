@@ -2,10 +2,22 @@ import dlog
 import mem
 import gbmath
 
+OPCODE_INFO_SIZE = 0
+OPCODE_INFO_NAME = 1
+OPCODE_INFO_PARAMS = 2
+
+CLOCK_FREQUENCY = 4194304 # in hz
+CYCLE_DURATION = 1.0/CLOCK_FREQUENCY # in seconds
+
 class OP:
+    
+    # current opcode
     cycles = 0
     prefix = 0
     code = 0
+    address = 0
+    
+    # opcode map
     map = None
     map_nopref = None
     map_cbpref = None
@@ -16,27 +28,27 @@ class OP:
         else:
             return("{0:0{1}X}".format(self.prefix, 2) + spacer + 
                    "{0:0{1}X}".format(self.code, 2))
-    def name_str(self):
-        return self.map[self.code][1]
-    def params_str(self):
-        return self.map[self.code][2]
-    def bytes_to_str(self, bytes, spacer = "\t"):       
-        byte = bytes[0]
-        if(byte == 0xCB):
-            return(self.map_cbpref[bytes[1]][1] + spacer +
-                   self.map_cbpref[bytes[1]][2])
-        elif(byte == 0xDD):
+    
+    def is_prefix(self, byte):
+        if(byte == 0xCB or byte == 0xDD or byte == 0xED or byte == 0xFD):
+            return True
+        return False
+    
+    def get_opcode_info(self, prefix, opcode):
+        if(prefix == 0x00):
+            return self.map_nopref[opcode][1]
+        if(prefix == 0xCB):
+            return self.map_cbpref[opcode][1]
+        if(prefix == 0xDD):
             dlog.print_error("Z80", "0xDD prefix not implemented")
             return "not implemented"
-        elif(byte == 0xED):
-            dlog.print_error("Z80", "0xDD prefix not implemented")
+        if(prefix == 0xED):
+            dlog.print_error("Z80", "0xED prefix not implemented")
             return "not implemented"
-        elif(byte == 0xFD):
-            dlog.print_error("Z80", "0xDD prefix not implemented")
+        if(prefix == 0xFD):
+            dlog.print_error("Z80", "0xFD prefix not implemented")
             return "not implemented"
-        else:
-            return(self.map_nopref[byte][1] + spacer +
-                   self.map_nopref[byte][2])
+            
 op = OP()
 
 class Register:
@@ -211,37 +223,42 @@ class RegisterSet:
                 
 reg = RegisterSet()
 
-cycles = 0
-halted = False
-stopped = False
-interrupt_enabled = False
-interrupt_requested = False
+class State:
+    time_passed = 0
+    step_nr = 0
+    cycles_total = 0
+    halted = False
+    stopped = False
+    interrupt_enabled = False
+    interrupt_requested = False    
+    interrupt_running = False    
+state = State()
 
 def init():
     pass
     
-def execute():
-    global op, reg
-    global cycles, halted, stopped
-    global interrupt_enabled, interrupt_requested
-        
-    if(halted):
+def execute():        
+    if(state.halted):
         dlog.print_error("Z80", "halted behavior not implemented")
         
-    if(stopped):
+    if(state.stopped):
         dlog.print_error("Z80", "stopped behavior not implemented")
         
-    if(interrupt_enabled):
+    if(state.interrupt_enabled):
         dlog.print_error("Z80", "interrupt_enabled behavior not implemented")
         
-    if(interrupt_requested):
+    if(state.interrupt_requested):
         dlog.print_error("Z80", "interrupt_requested behavior not implemented")
+        
+    if(state.interrupt_running):
+        dlog.print_error("Z80", "interrupt_running behavior not implemented")
     
     # print current cpu state
     if(dlog.enable_z80):
         dlog.print_z80_st()
         
     # fetch op code
+    op.address = reg.pc
     byte = mem.read_byte(reg.pc); reg.pc += 1
     if(byte == 0xCB):
         op.prefix = 0xCB
@@ -278,7 +295,43 @@ def execute():
     
     # execute opcode
     op.map[op.code][0]()
-    cycles = cycles + op.cycles
+    
+    # state
+    state.step_nr += 1
+    state.cycles_total += op.cycles
+    state.time_passed = state.cycles_total * CYCLE_DURATION
+    
+def print_instruction_set():
+    
+    opcode2 = 128
+
+    for opcode in range(0, 128):
+    
+        msg = ""
+        
+        info = op.get_opcode_info(0x00, opcode)
+        msg += "0x{0:0{1}X}".format(0x00, 2) + "{0:0{1}X}".format(opcode, 2) + "  "
+        msg += info[OPCODE_INFO_NAME].ljust(5, " ")
+        msg += info[OPCODE_INFO_PARAMS].ljust(10, " ")
+        
+        info = op.get_opcode_info(0x00, opcode2)
+        msg += "0x{0:0{1}X}".format(0x00, 2) + "{0:0{1}X}".format(opcode2, 2) + "  "
+        msg += info[OPCODE_INFO_NAME].ljust(5, " ")
+        msg += info[OPCODE_INFO_PARAMS].ljust(10, " ")
+        
+        info = op.get_opcode_info(0xCB, opcode)        
+        msg += "0x{0:0{1}X}".format(0xCB, 2) + "{0:0{1}X}".format(opcode, 2) + "  "
+        msg += info[OPCODE_INFO_NAME].ljust(5, " ")
+        msg += info[OPCODE_INFO_PARAMS].ljust(10, " ")
+        
+        info = op.get_opcode_info(0xCB, opcode2)        
+        msg += "0x{0:0{1}X}".format(0xCB, 2) + "{0:0{1}X}".format(opcode2, 2) + "  "
+        msg += info[OPCODE_INFO_NAME].ljust(5, " ")
+        msg += info[OPCODE_INFO_PARAMS].ljust(10, " ")
+        
+        opcode2 += 1
+                
+        print(msg)
     
 def exit():
     # print current cpu state
@@ -549,7 +602,7 @@ def op_and_a_x_helper(s2):
     reg.reset_flags()
     reg.set_flag_h()
     if(result == 0):
-        result.set_flag_z()
+        reg.set_flag_z()
     reg.a = result
 
 ### OP OR (8-bit) ##################################################################
@@ -570,7 +623,7 @@ def op_or_a_x_helper(s2):
     result = s1|s2
     reg.reset_flags()
     if(result == 0):
-        result.set_flag_z()
+        reg.set_flag_z()
     reg.a = result
 
 ### OP XOR (8-bit) #################################################################
@@ -591,7 +644,7 @@ def op_xor_a_x_helper(s2):
     result = s1^s2
     reg.reset_flags()
     if(result == 0):
-        result.set_flag_z()
+        reg.set_flag_z()
     reg.a = result
     
 ### OP CP (8-bit) ##################################################################
@@ -823,14 +876,12 @@ def op_nop():
     
 ### OP HALT ########################################################################
 def op_halt():
-    global halted
-    halted = True
+    state.halted = True
     op.cycles = 4
     
 ### OP STOP ########################################################################
 def op_stop():
-    global stopped
-    stopped = True
+    state.stopped = True
     # Skip one byte because
     # https://stackoverflow.com/questions/41353869/length-of-instruction-ld-a-c-in-gameboy-z80-processor
     # There is a hardware bug on Gameboy Classic that causes 
@@ -840,14 +891,12 @@ def op_stop():
     
 ### OP DI ##########################################################################
 def op_di():
-    global interrupt_enabled
-    interrupt_enabled = False
+    state.interrupt_enabled = False
     op.cycles = 4
     
 ### OP EI ##########################################################################
 def op_ei():
-    global interrupt_enabled
-    interrupt_enabled = True    
+    state.interrupt_enabled = True    
     
 ### OP RLC #########################################################################   
 def op_rlc_a():
@@ -1180,535 +1229,561 @@ def op_call_c_nn():
         reg.pc += 2
     op.cycles = 12
 
+### OP RST #########################################################################
+def op_rst_n():
+    reg.sp -= 2; mem.write_word(reg.sp, reg.pc)
+    reg.pc = op.code&0x38
+    op.cycles = 32
+
+### OP RET #########################################################################
+def op_ret():
+    reg.pc = mem.read_word(reg.sp)
+    reg.sp += 2
+    op.cycles = 8
+def op_ret_nz():
+    if(not reg.get_flag_z()): 
+        reg.pc = mem.read_word(reg.sp)
+        reg.sp += 2
+    op.cycles = 8
+def op_ret_z():
+    if(reg.get_flag_z()): 
+        reg.pc = mem.read_word(reg.sp)
+        reg.sp += 2
+    op.cycles = 8
+def op_ret_nc():
+    if(not reg.get_flag_c()): 
+        reg.pc = mem.read_word(reg.sp)
+        reg.sp += 2
+    op.cycles = 8
+def op_ret_c():
+    if(reg.get_flag_c()): 
+        reg.pc = mem.read_word(reg.sp)
+        reg.sp += 2
+    op.cycles = 8
+    
+### OP RET #########################################################################
+def op_reti():
+    reg.pc = mem.read_word(reg.sp)
+    reg.sp += 2
+    op.cycles = 8
+    state.interrupt_enabled = True
+    state.interrupt_running = False
+    
 ### OP XXX #########################################################################
 def op_xxx():
+    op.cycles = 4
     dlog.print_error("Z80", "invalid opcode " + hex(op.code) + " at " +  hex(reg.pc-1))
         
 ### OP MAP (UNPREFIXED) ############################################################
-op.map_nopref = [op_xxx]*256
+op.map_nopref       = [None]*256
+op.map_cbpref       = [None]*256
+no_operation        = [op_xxx,          (1, "XXX", "")]
+op.map_nopref[0x7F] = [op_ld_r1_r2,     (1, "LD", "A,A")]
+op.map_nopref[0x78] = [op_ld_r1_r2,     (1, "LD", "A,B")]
+op.map_nopref[0x79] = [op_ld_r1_r2,     (1, "LD", "A,C")]
+op.map_nopref[0x7A] = [op_ld_r1_r2,     (1, "LD", "A,D")]
+op.map_nopref[0x7B] = [op_ld_r1_r2,     (1, "LD", "A,E")]
+op.map_nopref[0x7C] = [op_ld_r1_r2,     (1, "LD", "A,H")]
+op.map_nopref[0x7D] = [op_ld_r1_r2,     (1, "LD", "A,L")]
+op.map_nopref[0x47] = [op_ld_r1_r2,     (1, "LD", "B,A")]
+op.map_nopref[0x40] = [op_ld_r1_r2,     (1, "LD", "B,B")]
+op.map_nopref[0x41] = [op_ld_r1_r2,     (1, "LD", "B,C")]
+op.map_nopref[0x42] = [op_ld_r1_r2,     (1, "LD", "B,D")]
+op.map_nopref[0x43] = [op_ld_r1_r2,     (1, "LD", "B,E")]
+op.map_nopref[0x44] = [op_ld_r1_r2,     (1, "LD", "B,H")]
+op.map_nopref[0x45] = [op_ld_r1_r2,     (1, "LD", "B,L")]
+op.map_nopref[0x4F] = [op_ld_r1_r2,     (1, "LD", "C,A")]
+op.map_nopref[0x48] = [op_ld_r1_r2,     (1, "LD", "C,B")]
+op.map_nopref[0x49] = [op_ld_r1_r2,     (1, "LD", "C,C")]
+op.map_nopref[0x4A] = [op_ld_r1_r2,     (1, "LD", "C,D")]
+op.map_nopref[0x4B] = [op_ld_r1_r2,     (1, "LD", "C,E")]
+op.map_nopref[0x4C] = [op_ld_r1_r2,     (1, "LD", "C,H")]
+op.map_nopref[0x4D] = [op_ld_r1_r2,     (1, "LD", "C,L")]
+op.map_nopref[0x57] = [op_ld_r1_r2,     (1, "LD", "D,A")]
+op.map_nopref[0x50] = [op_ld_r1_r2,     (1, "LD", "D,B")]
+op.map_nopref[0x51] = [op_ld_r1_r2,     (1, "LD", "D,C")]
+op.map_nopref[0x52] = [op_ld_r1_r2,     (1, "LD", "D,D")]
+op.map_nopref[0x53] = [op_ld_r1_r2,     (1, "LD", "D,E")]
+op.map_nopref[0x54] = [op_ld_r1_r2,     (1, "LD", "D,H")]
+op.map_nopref[0x55] = [op_ld_r1_r2,     (1, "LD", "D,L")]
+op.map_nopref[0x5F] = [op_ld_r1_r2,     (1, "LD", "E,A")]
+op.map_nopref[0x58] = [op_ld_r1_r2,     (1, "LD", "E,B")]
+op.map_nopref[0x59] = [op_ld_r1_r2,     (1, "LD", "E,C")]
+op.map_nopref[0x5A] = [op_ld_r1_r2,     (1, "LD", "E,D")]
+op.map_nopref[0x5B] = [op_ld_r1_r2,     (1, "LD", "E,E")]
+op.map_nopref[0x5C] = [op_ld_r1_r2,     (1, "LD", "E,H")]
+op.map_nopref[0x5D] = [op_ld_r1_r2,     (1, "LD", "E,L")]
+op.map_nopref[0x67] = [op_ld_r1_r2,     (1, "LD", "H,A")]
+op.map_nopref[0x60] = [op_ld_r1_r2,     (1, "LD", "H,B")]
+op.map_nopref[0x61] = [op_ld_r1_r2,     (1, "LD", "H,C")]
+op.map_nopref[0x62] = [op_ld_r1_r2,     (1, "LD", "H,D")]
+op.map_nopref[0x63] = [op_ld_r1_r2,     (1, "LD", "H,E")]
+op.map_nopref[0x64] = [op_ld_r1_r2,     (1, "LD", "H,H")]
+op.map_nopref[0x65] = [op_ld_r1_r2,     (1, "LD", "H,L")] 
+op.map_nopref[0x6F] = [op_ld_r1_r2,     (1, "LD", "L,A")]
+op.map_nopref[0x68] = [op_ld_r1_r2,     (1, "LD", "L,B")]
+op.map_nopref[0x69] = [op_ld_r1_r2,     (1, "LD", "L,C")]
+op.map_nopref[0x6A] = [op_ld_r1_r2,     (1, "LD", "L,D")]
+op.map_nopref[0x6B] = [op_ld_r1_r2,     (1, "LD", "L,E")]
+op.map_nopref[0x6C] = [op_ld_r1_r2,     (1, "LD", "L,H")]
+op.map_nopref[0x6D] = [op_ld_r1_r2,     (1, "LD", "L,L")]
+op.map_nopref[0x3E] = [op_ld_r1_n,      (2, "LD", "A,n")]
+op.map_nopref[0x06] = [op_ld_r1_n,      (2, "LD", "B,n")]
+op.map_nopref[0x0E] = [op_ld_r1_n,      (2, "LD", "C,n")]
+op.map_nopref[0x16] = [op_ld_r1_n,      (2, "LD", "D,n")]
+op.map_nopref[0x1E] = [op_ld_r1_n,      (2, "LD", "E,n")]
+op.map_nopref[0x26] = [op_ld_r1_n,      (2, "LD", "H,n")]
+op.map_nopref[0x2E] = [op_ld_r1_n,      (2, "LD", "L,n")]
+op.map_nopref[0xEA] = [op_ld_nnmem_a,   (3, "LD", "(nn),A")]
+op.map_nopref[0x02] = [op_ld_bcmem_a,   (1, "LD", "(BC),A")]
+op.map_nopref[0x12] = [op_ld_demem_a,   (1, "LD", "(DE),A")]
+op.map_nopref[0x77] = [op_ld_hlmem_r2,  (1, "LD", "(HL),A")]
+op.map_nopref[0x70] = [op_ld_hlmem_r2,  (1, "LD", "(HL),B")]
+op.map_nopref[0x71] = [op_ld_hlmem_r2,  (1, "LD", "(HL),C")]
+op.map_nopref[0x72] = [op_ld_hlmem_r2,  (1, "LD", "(HL),D")]
+op.map_nopref[0x73] = [op_ld_hlmem_r2,  (1, "LD", "(HL),E")]
+op.map_nopref[0x74] = [op_ld_hlmem_r2,  (1, "LD", "(HL),H")]
+op.map_nopref[0x75] = [op_ld_hlmem_r2,  (1, "LD", "(HL),L")]
+op.map_nopref[0x36] = [op_ld_hlmem_n,   (2, "LD", "(HL),n")]
+op.map_nopref[0xFA] = [op_ld_a_nnmem,   (3, "LD", "A,(nn)")]
+op.map_nopref[0x0A] = [op_ld_a_bcmem,   (1, "LD", "A,(BC)")]
+op.map_nopref[0x1A] = [op_ld_a_demem,   (1, "LD", "A,(DE)")]
+op.map_nopref[0x7E] = [op_ld_r1_hlmem,  (1, "LD", "A,(HL)")]
+op.map_nopref[0x46] = [op_ld_r1_hlmem,  (1, "LD", "B,(HL)")]
+op.map_nopref[0x4E] = [op_ld_r1_hlmem,  (1, "LD", "C,(HL)")]
+op.map_nopref[0x56] = [op_ld_r1_hlmem,  (1, "LD", "D,(HL)")]
+op.map_nopref[0x5E] = [op_ld_r1_hlmem,  (1, "LD", "E,(HL)")]
+op.map_nopref[0x66] = [op_ld_r1_hlmem,  (1, "LD", "H,(HL)")]
+op.map_nopref[0x6E] = [op_ld_r1_hlmem,  (1, "LD", "L,(HL)")]
+op.map_nopref[0xF2] = [op_ld_a_ff00c,   (1, "LD", "A,(C)")]
+op.map_nopref[0xE2] = [op_ld_ff00c_a,   (1, "LD", "(C),A")]
+op.map_nopref[0xF0] = [op_ld_a_ff00n,   (2, "LD", "A,(n)")]
+op.map_nopref[0xE0] = [op_ld_ff00n_a,   (2, "LD", "(n),A")]
+op.map_nopref[0x3A] = [op_ldd_a_hlmem,  (1, "LD", "A,(HL-)")]
+op.map_nopref[0x32] = [op_ldd_hlmem_a,  (1, "LD", "(HL-),A")]
+op.map_nopref[0x2A] = [op_ldi_a_hlmem,  (1, "LD", "A,(HL+)")]
+op.map_nopref[0x22] = [op_ldi_hlmem_a,  (1, "LD", "(HL+),A")]    
+op.map_nopref[0x01] = [op_ld_rp_nn,     (3, "LD", "BC,nn")]
+op.map_nopref[0x11] = [op_ld_rp_nn,     (3, "LD", "DE,nn")]
+op.map_nopref[0x21] = [op_ld_rp_nn,     (3, "LD", "HL,nn")]
+op.map_nopref[0x31] = [op_ld_rp_nn,     (3, "LD", "SP,nn")]
+op.map_nopref[0xF9] = [op_ld_sp_hl,     (1, "LD", "SP,HL")]
+op.map_nopref[0xF8] = [op_ldhl_sp_n,    (2, "LD", "HL,SP+n")]
+op.map_nopref[0x08] = [op_ld_nnmem_sp,  (3, "LD", "(nn),SP")]    
+op.map_nopref[0xF5] = [op_push_af,      (1, "PUSH", "AF")]
+op.map_nopref[0xC5] = [op_push_bc,      (1, "PUSH", "BC")]
+op.map_nopref[0xD5] = [op_push_de,      (1, "PUSH", "DE")]
+op.map_nopref[0xE5] = [op_push_hl,      (1, "PUSH", "HL")]    
+op.map_nopref[0xF1] = [op_pop_af,       (1, "POP", "AF")]
+op.map_nopref[0xC1] = [op_pop_bc,       (1, "POP", "BC")]
+op.map_nopref[0xD1] = [op_pop_de,       (1, "POP", "DE")]
+op.map_nopref[0xE1] = [op_pop_hl,       (1, "POP", "HL")]    
+op.map_nopref[0x87] = [op_add_a_r2,     (1, "ADD", "A,A")]
+op.map_nopref[0x80] = [op_add_a_r2,     (1, "ADD", "A,B")]
+op.map_nopref[0x81] = [op_add_a_r2,     (1, "ADD", "A,C")]
+op.map_nopref[0x82] = [op_add_a_r2,     (1, "ADD", "A,D")]
+op.map_nopref[0x83] = [op_add_a_r2,     (1, "ADD", "A,E")]
+op.map_nopref[0x84] = [op_add_a_r2,     (1, "ADD", "A,H")]
+op.map_nopref[0x85] = [op_add_a_r2,     (1, "ADD", "A,L")]
+op.map_nopref[0x86] = [op_add_a_hlmem,  (1, "ADD", "A,(HL)")]
+op.map_nopref[0xC6] = [op_add_a_n,      (2, "ADD", "A,n")]    
+op.map_nopref[0x8F] = [op_adc_a_r2,     (1, "ADC", "A,A")]
+op.map_nopref[0x88] = [op_adc_a_r2,     (1, "ADC", "A,B")]
+op.map_nopref[0x89] = [op_adc_a_r2,     (1, "ADC", "A,C")]
+op.map_nopref[0x8A] = [op_adc_a_r2,     (1, "ADC", "A,D")]
+op.map_nopref[0x8B] = [op_adc_a_r2,     (1, "ADC", "A,E")]
+op.map_nopref[0x8C] = [op_adc_a_r2,     (1, "ADC", "A,H")]
+op.map_nopref[0x8D] = [op_adc_a_r2,     (1, "ADC", "A,L")]
+op.map_nopref[0x8E] = [op_adc_a_hlmem,  (1, "ADC", "A,(HL)")]
+op.map_nopref[0xCE] = [op_adc_a_n,      (2, "ADC", "A,n")]    
+op.map_nopref[0x97] = [op_sub_a_r2,     (1, "SUB", "A,A")]
+op.map_nopref[0x90] = [op_sub_a_r2,     (1, "SUB", "A,B")]
+op.map_nopref[0x91] = [op_sub_a_r2,     (1, "SUB", "A,C")]
+op.map_nopref[0x92] = [op_sub_a_r2,     (1, "SUB", "A,D")]
+op.map_nopref[0x93] = [op_sub_a_r2,     (1, "SUB", "A,E")]
+op.map_nopref[0x94] = [op_sub_a_r2,     (1, "SUB", "A,H")]
+op.map_nopref[0x95] = [op_sub_a_r2,     (1, "SUB", "A,L")]
+op.map_nopref[0x96] = [op_sub_a_hlmem,  (1, "SUB", "A,(HL)")]
+op.map_nopref[0xD6] = [op_sub_a_n,      (2, "SUB", "A,n")]    
+op.map_nopref[0x9F] = [op_sbc_a_r2,     (1, "SBC", "A,A")]
+op.map_nopref[0x98] = [op_sbc_a_r2,     (1, "SBC", "A,B")]
+op.map_nopref[0x99] = [op_sbc_a_r2,     (1, "SBC", "A,C")]
+op.map_nopref[0x9A] = [op_sbc_a_r2,     (1, "SBC", "A,D")]
+op.map_nopref[0x9B] = [op_sbc_a_r2,     (1, "SBC", "A,E")]
+op.map_nopref[0x9C] = [op_sbc_a_r2,     (1, "SBC", "A,H")]
+op.map_nopref[0x9D] = [op_sbc_a_r2,     (1, "SBC", "A,L")]
+op.map_nopref[0x9E] = [op_sbc_a_hlmem,  (1, "SBC", "A,(HL)")]
+op.map_nopref[0xDE] = [op_sbc_a_n,      (2, "SBC", "A,n")]    
+op.map_nopref[0xA7] = [op_and_a_r2,     (1, "AND", "A")]
+op.map_nopref[0xA0] = [op_and_a_r2,     (1, "AND", "B")]
+op.map_nopref[0xA1] = [op_and_a_r2,     (1, "AND", "C")]
+op.map_nopref[0xA2] = [op_and_a_r2,     (1, "AND", "D")]
+op.map_nopref[0xA3] = [op_and_a_r2,     (1, "AND", "E")]
+op.map_nopref[0xA4] = [op_and_a_r2,     (1, "AND", "H")]
+op.map_nopref[0xA5] = [op_and_a_r2,     (1, "AND", "L")]
+op.map_nopref[0xA6] = [op_and_a_hlmem,  (1, "AND", "(HL)")]
+op.map_nopref[0xE6] = [op_and_a_n,      (2, "AND", "n")]    
+op.map_nopref[0xB7] = [op_or_a_r2,      (1, "OR", "A")]
+op.map_nopref[0xB0] = [op_or_a_r2,      (1, "OR", "B")]
+op.map_nopref[0xB1] = [op_or_a_r2,      (1, "OR", "C")]
+op.map_nopref[0xB2] = [op_or_a_r2,      (1, "OR", "D")]
+op.map_nopref[0xB3] = [op_or_a_r2,      (1, "OR", "E")]
+op.map_nopref[0xB4] = [op_or_a_r2,      (1, "OR", "H")]
+op.map_nopref[0xB5] = [op_or_a_r2,      (1, "OR", "L")]
+op.map_nopref[0xB6] = [op_or_a_hlmem,   (1, "OR", "(HL)")]
+op.map_nopref[0xF6] = [op_or_a_n,       (2, "OR", "n")]    
+op.map_nopref[0xAF] = [op_xor_a_r2,     (1, "XOR", "A")]
+op.map_nopref[0xA8] = [op_xor_a_r2,     (1, "XOR", "B")]
+op.map_nopref[0xA9] = [op_xor_a_r2,     (1, "XOR", "C")]
+op.map_nopref[0xAA] = [op_xor_a_r2,     (1, "XOR", "D")]
+op.map_nopref[0xAB] = [op_xor_a_r2,     (1, "XOR", "E")]
+op.map_nopref[0xAC] = [op_xor_a_r2,     (1, "XOR", "H")]
+op.map_nopref[0xAD] = [op_xor_a_r2,     (1, "XOR", "L")]
+op.map_nopref[0xAE] = [op_xor_a_hlmem,  (1, "XOR", "(HL)")]
+op.map_nopref[0xEE] = [op_xor_a_n,      (2, "XOR", "n")]    
+op.map_nopref[0xBF] = [op_cp_a_r2,      (1, "CP", "A")]
+op.map_nopref[0xB8] = [op_cp_a_r2,      (1, "CP", "B")]
+op.map_nopref[0xB9] = [op_cp_a_r2,      (1, "CP", "C")]
+op.map_nopref[0xBA] = [op_cp_a_r2,      (1, "CP", "D")]
+op.map_nopref[0xBB] = [op_cp_a_r2,      (1, "CP", "E")]
+op.map_nopref[0xBC] = [op_cp_a_r2,      (1, "CP", "H")]
+op.map_nopref[0xBD] = [op_cp_a_r2,      (1, "CP", "L")]
+op.map_nopref[0xBE] = [op_cp_a_hlmem,   (1, "CP", "(HL)")]
+op.map_nopref[0xFE] = [op_cp_a_n,       (2, "CP", "n")]    
+op.map_nopref[0x3C] = [op_inc_r1,       (1, "INC", "A")]
+op.map_nopref[0x04] = [op_inc_r1,       (1, "INC", "B")]
+op.map_nopref[0x0C] = [op_inc_r1,       (1, "INC", "C")]
+op.map_nopref[0x14] = [op_inc_r1,       (1, "INC", "D")]
+op.map_nopref[0x1C] = [op_inc_r1,       (1, "INC", "E")]
+op.map_nopref[0x24] = [op_inc_r1,       (1, "INC", "H")]
+op.map_nopref[0x2C] = [op_inc_r1,       (1, "INC", "L")]
+op.map_nopref[0x34] = [op_inc_hlmem,    (1, "INC", "(HL)")]    
+op.map_nopref[0x3D] = [op_dec_r1,       (1, "DEC", "A")]
+op.map_nopref[0x05] = [op_dec_r1,       (1, "DEC", "B")]
+op.map_nopref[0x0D] = [op_dec_r1,       (1, "DEC", "C")]
+op.map_nopref[0x15] = [op_dec_r1,       (1, "DEC", "D")]
+op.map_nopref[0x1D] = [op_dec_r1,       (1, "DEC", "E")]
+op.map_nopref[0x25] = [op_dec_r1,       (1, "DEC", "H")]
+op.map_nopref[0x2D] = [op_dec_r1,       (1, "DEC", "L")]
+op.map_nopref[0x35] = [op_dec_hlmem,    (1, "DEC", "(HL)")]    
+op.map_nopref[0x09] = [op_add_hl_rp,    (1, "ADD", "HL,BC")]
+op.map_nopref[0x19] = [op_add_hl_rp,    (1, "ADD", "HL,DE")]
+op.map_nopref[0x29] = [op_add_hl_rp,    (1, "ADD", "HL,HL")]
+op.map_nopref[0x39] = [op_add_hl_rp,    (1, "ADD", "HL,SP")]
+op.map_nopref[0xE8] = [op_add_sp_n,     (2, "ADD", "SP,n")]    
+op.map_nopref[0x03] = [op_inc_rp,       (1, "INC", "BC")]
+op.map_nopref[0x13] = [op_inc_rp,       (1, "INC", "DE")]
+op.map_nopref[0x23] = [op_inc_rp,       (1, "INC", "HL")]
+op.map_nopref[0x33] = [op_inc_rp,       (1, "INC", "SP")]    
+op.map_nopref[0x0B] = [op_dec_rp,       (1, "DEC", "BC")]
+op.map_nopref[0x1B] = [op_dec_rp,       (1, "DEC", "DE")]
+op.map_nopref[0x2B] = [op_dec_rp,       (1, "DEC", "HL")]
+op.map_nopref[0x3B] = [op_dec_rp,       (1, "DEC", "SP")]
+op.map_nopref[0x27] = [op_daa,          (1, "DAA", "")]
+op.map_nopref[0x2F] = [op_cpl,          (1, "CPL", "")]
+op.map_nopref[0x3F] = [op_ccf,          (1, "CCF", "")]
+op.map_nopref[0x37] = [op_scf,          (1, "SCF", "")]
+op.map_nopref[0x00] = [op_nop,          (1, "NOP", "")]
+op.map_nopref[0x76] = [op_halt,         (1, "HALT", "")]
+op.map_nopref[0x10] = [op_stop,         (2, "STOP", "")]
+op.map_nopref[0xF3] = [op_di,           (1, "DI", "")]
+op.map_nopref[0x07] = [op_rlc_a,        (1, "RLCA", "")]
+op.map_nopref[0x17] = [op_rl_a,         (1, "RLA", "")]
+op.map_nopref[0x0F] = [op_rrc_a,        (1, "RRCA", "")]
+op.map_nopref[0x1F] = [op_rr_a,         (1, "RRA", "")]
+op.map_nopref[0x1F] = [op_rr_a,         (1, "RRA", "")]
+op.map_nopref[0xC3] = [op_jp_nn,        (3, "JP", "nn")]
+op.map_nopref[0xC2] = [op_jp_nz_nn,     (3, "JP", "NZ,nn")]
+op.map_nopref[0xCA] = [op_jp_z_nn,      (3, "JP", "Z,nn")]
+op.map_nopref[0xD2] = [op_jp_nc_nn,     (3, "JP", "NC,nn")]
+op.map_nopref[0xDA] = [op_jp_c_nn,      (3, "JP", "C,nn")]
+op.map_nopref[0xE9] = [op_jp_hl,        (1, "JP", "(HL)")]
+op.map_nopref[0x18] = [op_jr_n,         (2, "JR", "n")]
+op.map_nopref[0x20] = [op_jr_nz_n,      (2, "JR", "NZ,n")]
+op.map_nopref[0x28] = [op_jr_z_n,       (2, "JR", "Z,n")]
+op.map_nopref[0x30] = [op_jr_nc_n,      (2, "JR", "NC,n")]
+op.map_nopref[0x38] = [op_jr_c_n,       (2, "JR", "C,n")]
+op.map_nopref[0xCD] = [op_call_nn,      (3, "CALL", "nn")]
+op.map_nopref[0xC4] = [op_call_nz_nn,   (3, "CALL", "NZ,nn")]
+op.map_nopref[0xCC] = [op_call_z_nn,    (3, "CALL", "Z,nn")]
+op.map_nopref[0xD4] = [op_call_nc_nn,   (3, "CALL", "NC,nn")]
+op.map_nopref[0xDC] = [op_call_c_nn,    (3, "CALL", "C,nn")]
+op.map_nopref[0xC9] = [op_ret,          (1, "RET", "")]
+op.map_nopref[0xC0] = [op_ret_nz,       (3, "RET", "NZ,nn")]
+op.map_nopref[0xC8] = [op_ret_z,        (3, "RET", "Z,nn")]
+op.map_nopref[0xD0] = [op_ret_nc,       (3, "RET", "NC,nn")]
+op.map_nopref[0xD8] = [op_ret_c,        (3, "RET", "C,nn")]
+op.map_nopref[0xD9] = [op_reti,         (1, "RETI", "")]
+op.map_nopref[0xC7] = [op_rst_n,        (1, "RST", "00H")]
+op.map_nopref[0xCF] = [op_rst_n,        (1, "RST", "08H")]
+op.map_nopref[0xD7] = [op_rst_n,        (1, "RST", "10H")]
+op.map_nopref[0xDF] = [op_rst_n,        (1, "RST", "18H")]
+op.map_nopref[0xE7] = [op_rst_n,        (1, "RST", "20H")]
+op.map_nopref[0xEF] = [op_rst_n,        (1, "RST", "28H")]
+op.map_nopref[0xF7] = [op_rst_n,        (1, "RST", "30H")]
+op.map_nopref[0xFF] = [op_rst_n,        (1, "RST", "38H")]
+op.map_cbpref[0x37] = [op_swap_r,       (2, "SWAP", "A")]
+op.map_cbpref[0x30] = [op_swap_r,       (2, "SWAP", "B")]
+op.map_cbpref[0x31] = [op_swap_r,       (2, "SWAP", "C")]
+op.map_cbpref[0x32] = [op_swap_r,       (2, "SWAP", "D")]
+op.map_cbpref[0x33] = [op_swap_r,       (2, "SWAP", "E")]
+op.map_cbpref[0x34] = [op_swap_r,       (2, "SWAP", "H")]
+op.map_cbpref[0x35] = [op_swap_r,       (2, "SWAP", "L")]
+op.map_cbpref[0x36] = [op_swap_hlmem,   (2, "SWAP", "(HL)")]
+op.map_cbpref[0x07] = [op_rlc_r,        (2, "RLC", "A")]
+op.map_cbpref[0x00] = [op_rlc_r,        (2, "RLC", "B")]
+op.map_cbpref[0x01] = [op_rlc_r,        (2, "RLC", "C")]
+op.map_cbpref[0x02] = [op_rlc_r,        (2, "RLC", "D")]
+op.map_cbpref[0x03] = [op_rlc_r,        (2, "RLC", "E")]
+op.map_cbpref[0x04] = [op_rlc_r,        (2, "RLC", "H")]
+op.map_cbpref[0x05] = [op_rlc_r,        (2, "RLC", "L")]
+op.map_cbpref[0x06] = [op_rlc_hlmem,    (2, "RLC", "(HL)")]
+op.map_cbpref[0x17] = [op_rl_r,         (2, "RL", "A")]
+op.map_cbpref[0x10] = [op_rl_r,         (2, "RL", "B")]
+op.map_cbpref[0x11] = [op_rl_r,         (2, "RL", "C")]
+op.map_cbpref[0x12] = [op_rl_r,         (2, "RL", "D")]
+op.map_cbpref[0x13] = [op_rl_r,         (2, "RL", "E")]
+op.map_cbpref[0x14] = [op_rl_r,         (2, "RL", "H")]
+op.map_cbpref[0x15] = [op_rl_r,         (2, "RL", "L")]
+op.map_cbpref[0x16] = [op_rl_hlmem,     (2, "RL", "(HL)")]
+op.map_cbpref[0x0F] = [op_rrc_r,        (2, "RRC", "A")]
+op.map_cbpref[0x08] = [op_rrc_r,        (2, "RRC", "B")]
+op.map_cbpref[0x09] = [op_rrc_r,        (2, "RRC", "C")]
+op.map_cbpref[0x0A] = [op_rrc_r,        (2, "RRC", "D")]
+op.map_cbpref[0x0B] = [op_rrc_r,        (2, "RRC", "E")]
+op.map_cbpref[0x0C] = [op_rrc_r,        (2, "RRC", "H")]
+op.map_cbpref[0x0D] = [op_rrc_r,        (2, "RRC", "L")]
+op.map_cbpref[0x0E] = [op_rrc_hlmem,    (2, "RRC", "(HL)")]
+op.map_cbpref[0x1F] = [op_rr_r,         (2, "RR", "A")]
+op.map_cbpref[0x18] = [op_rr_r,         (2, "RR", "B")]
+op.map_cbpref[0x19] = [op_rr_r,         (2, "RR", "C")]
+op.map_cbpref[0x1A] = [op_rr_r,         (2, "RR", "D")]
+op.map_cbpref[0x1B] = [op_rr_r,         (2, "RR", "E")]
+op.map_cbpref[0x1C] = [op_rr_r,         (2, "RR", "H")]
+op.map_cbpref[0x1D] = [op_rr_r,         (2, "RR", "L")]
+op.map_cbpref[0x1E] = [op_rr_hlmem,     (2, "RR", "(HL)")]
+op.map_cbpref[0x27] = [op_sla_r,        (2, "SLA", "A")]
+op.map_cbpref[0x20] = [op_sla_r,        (2, "SLA", "B")]
+op.map_cbpref[0x21] = [op_sla_r,        (2, "SLA", "C")]
+op.map_cbpref[0x22] = [op_sla_r,        (2, "SLA", "D")]
+op.map_cbpref[0x23] = [op_sla_r,        (2, "SLA", "E")]
+op.map_cbpref[0x24] = [op_sla_r,        (2, "SLA", "H")]
+op.map_cbpref[0x25] = [op_sla_r,        (2, "SLA", "L")]
+op.map_cbpref[0x26] = [op_sla_hlmem,    (2, "SLA", "(HL)")]    
+op.map_cbpref[0x2F] = [op_sra_r,        (2, "SRA", "A")]
+op.map_cbpref[0x28] = [op_sra_r,        (2, "SRA", "B")]
+op.map_cbpref[0x29] = [op_sra_r,        (2, "SRA", "C")]
+op.map_cbpref[0x2A] = [op_sra_r,        (2, "SRA", "D")]
+op.map_cbpref[0x2B] = [op_sra_r,        (2, "SRA", "E")]
+op.map_cbpref[0x2C] = [op_sra_r,        (2, "SRA", "H")]
+op.map_cbpref[0x2D] = [op_sra_r,        (2, "SRA", "L")]
+op.map_cbpref[0x2E] = [op_sra_hlmem,    (2, "SRA", "(HL)")]    
+op.map_cbpref[0x3F] = [op_srl_r,        (2, "SRL", "A")]
+op.map_cbpref[0x38] = [op_srl_r,        (2, "SRL", "B")]
+op.map_cbpref[0x39] = [op_srl_r,        (2, "SRL", "C")]
+op.map_cbpref[0x3A] = [op_srl_r,        (2, "SRL", "D")]
+op.map_cbpref[0x3B] = [op_srl_r,        (2, "SRL", "E")]
+op.map_cbpref[0x3C] = [op_srl_r,        (2, "SRL", "H")]
+op.map_cbpref[0x3D] = [op_srl_r,        (2, "SRL", "L")]
+op.map_cbpref[0x3E] = [op_srl_hlmem,    (2, "SRL", "(HL)")]
+op.map_cbpref[0x47] = [op_bit_r,        (2, "BIT", "0,A")]
+op.map_cbpref[0x40] = [op_bit_r,        (2, "BIT", "0,B")]
+op.map_cbpref[0x41] = [op_bit_r,        (2, "BIT", "0,C")]
+op.map_cbpref[0x42] = [op_bit_r,        (2, "BIT", "0,D")]
+op.map_cbpref[0x43] = [op_bit_r,        (2, "BIT", "0,E")]
+op.map_cbpref[0x44] = [op_bit_r,        (2, "BIT", "0,H")]
+op.map_cbpref[0x45] = [op_bit_r,        (2, "BIT", "0,L")]
+op.map_cbpref[0x46] = [op_bit_hlmem,    (2, "BIT", "0,(HL)")]
+op.map_cbpref[0x4F] = [op_bit_r,        (2, "BIT", "1,A")]
+op.map_cbpref[0x48] = [op_bit_r,        (2, "BIT", "1,B")]
+op.map_cbpref[0x49] = [op_bit_r,        (2, "BIT", "1,C")]
+op.map_cbpref[0x4A] = [op_bit_r,        (2, "BIT", "1,D")]
+op.map_cbpref[0x4B] = [op_bit_r,        (2, "BIT", "1,E")]
+op.map_cbpref[0x4C] = [op_bit_r,        (2, "BIT", "1,H")]
+op.map_cbpref[0x4D] = [op_bit_r,        (2, "BIT", "1,L")]
+op.map_cbpref[0x4E] = [op_bit_hlmem,    (2, "BIT", "1,(HL)")]
+op.map_cbpref[0x57] = [op_bit_r,        (2, "BIT", "2,A")]
+op.map_cbpref[0x50] = [op_bit_r,        (2, "BIT", "2,B")]
+op.map_cbpref[0x51] = [op_bit_r,        (2, "BIT", "2,C")]
+op.map_cbpref[0x52] = [op_bit_r,        (2, "BIT", "2,D")]
+op.map_cbpref[0x53] = [op_bit_r,        (2, "BIT", "2,E")]
+op.map_cbpref[0x54] = [op_bit_r,        (2, "BIT", "2,H")]
+op.map_cbpref[0x55] = [op_bit_r,        (2, "BIT", "2,L")]
+op.map_cbpref[0x56] = [op_bit_hlmem,    (2, "BIT", "2,(HL)")]
+op.map_cbpref[0x5F] = [op_bit_r,        (2, "BIT", "3,A")]
+op.map_cbpref[0x58] = [op_bit_r,        (2, "BIT", "3,B")]
+op.map_cbpref[0x59] = [op_bit_r,        (2, "BIT", "3,C")]
+op.map_cbpref[0x5A] = [op_bit_r,        (2, "BIT", "3,D")]
+op.map_cbpref[0x5B] = [op_bit_r,        (2, "BIT", "3,E")]
+op.map_cbpref[0x5C] = [op_bit_r,        (2, "BIT", "3,H")]
+op.map_cbpref[0x5D] = [op_bit_r,        (2, "BIT", "3,L")]
+op.map_cbpref[0x5E] = [op_bit_hlmem,    (2, "BIT", "3,(HL)")]
+op.map_cbpref[0x67] = [op_bit_r,        (2, "BIT", "4,A")]
+op.map_cbpref[0x60] = [op_bit_r,        (2, "BIT", "4,B")]
+op.map_cbpref[0x61] = [op_bit_r,        (2, "BIT", "4,C")]
+op.map_cbpref[0x62] = [op_bit_r,        (2, "BIT", "4,D")]
+op.map_cbpref[0x63] = [op_bit_r,        (2, "BIT", "4,E")]
+op.map_cbpref[0x64] = [op_bit_r,        (2, "BIT", "4,H")]
+op.map_cbpref[0x65] = [op_bit_r,        (2, "BIT", "4,L")]
+op.map_cbpref[0x66] = [op_bit_hlmem,    (2, "BIT", "4,(HL)")]
+op.map_cbpref[0x6F] = [op_bit_r,        (2, "BIT", "5,A")]
+op.map_cbpref[0x68] = [op_bit_r,        (2, "BIT", "5,B")]
+op.map_cbpref[0x69] = [op_bit_r,        (2, "BIT", "5,C")]
+op.map_cbpref[0x6A] = [op_bit_r,        (2, "BIT", "5,D")]
+op.map_cbpref[0x6B] = [op_bit_r,        (2, "BIT", "5,E")]
+op.map_cbpref[0x6C] = [op_bit_r,        (2, "BIT", "5,H")]
+op.map_cbpref[0x6D] = [op_bit_r,        (2, "BIT", "5,L")]
+op.map_cbpref[0x6E] = [op_bit_hlmem,    (2, "BIT", "5,(HL)")]
+op.map_cbpref[0x77] = [op_bit_r,        (2, "BIT", "6,A")]
+op.map_cbpref[0x70] = [op_bit_r,        (2, "BIT", "6,B")]
+op.map_cbpref[0x71] = [op_bit_r,        (2, "BIT", "6,C")]
+op.map_cbpref[0x72] = [op_bit_r,        (2, "BIT", "6,D")]
+op.map_cbpref[0x73] = [op_bit_r,        (2, "BIT", "6,E")]
+op.map_cbpref[0x74] = [op_bit_r,        (2, "BIT", "6,H")]
+op.map_cbpref[0x75] = [op_bit_r,        (2, "BIT", "6,L")]
+op.map_cbpref[0x76] = [op_bit_hlmem,    (2, "BIT", "6,(HL)")]
+op.map_cbpref[0x7F] = [op_bit_r,        (2, "BIT", "7,A")]
+op.map_cbpref[0x78] = [op_bit_r,        (2, "BIT", "7,B")]
+op.map_cbpref[0x79] = [op_bit_r,        (2, "BIT", "7,C")]
+op.map_cbpref[0x7A] = [op_bit_r,        (2, "BIT", "7,D")]
+op.map_cbpref[0x7B] = [op_bit_r,        (2, "BIT", "7,E")]
+op.map_cbpref[0x7C] = [op_bit_r,        (2, "BIT", "7,H")]
+op.map_cbpref[0x7D] = [op_bit_r,        (2, "BIT", "7,L")]
+op.map_cbpref[0x7E] = [op_bit_hlmem,    (2, "BIT", "7,(HL)")]
+op.map_cbpref[0xC7] = [op_set_r,        (2, "SET", "0,A")]
+op.map_cbpref[0xC0] = [op_set_r,        (2, "SET", "0,B")]
+op.map_cbpref[0xC1] = [op_set_r,        (2, "SET", "0,C")]
+op.map_cbpref[0xC2] = [op_set_r,        (2, "SET", "0,D")]
+op.map_cbpref[0xC3] = [op_set_r,        (2, "SET", "0,E")]
+op.map_cbpref[0xC4] = [op_set_r,        (2, "SET", "0,H")]
+op.map_cbpref[0xC5] = [op_set_r,        (2, "SET", "0,L")]
+op.map_cbpref[0xC6] = [op_set_hlmem,    (2, "SET", "0,(HL)")]
+op.map_cbpref[0xCF] = [op_set_r,        (2, "SET", "1,A")]
+op.map_cbpref[0xC8] = [op_set_r,        (2, "SET", "1,B")]
+op.map_cbpref[0xC9] = [op_set_r,        (2, "SET", "1,C")]
+op.map_cbpref[0xCA] = [op_set_r,        (2, "SET", "1,D")]
+op.map_cbpref[0xCB] = [op_set_r,        (2, "SET", "1,E")]
+op.map_cbpref[0xCC] = [op_set_r,        (2, "SET", "1,H")]
+op.map_cbpref[0xCD] = [op_set_r,        (2, "SET", "1,L")]
+op.map_cbpref[0xCE] = [op_set_hlmem,    (2, "SET", "1,(HL)")]
+op.map_cbpref[0xD7] = [op_set_r,        (2, "SET", "2,A")]
+op.map_cbpref[0xD0] = [op_set_r,        (2, "SET", "2,B")]
+op.map_cbpref[0xD1] = [op_set_r,        (2, "SET", "2,C")]
+op.map_cbpref[0xD2] = [op_set_r,        (2, "SET", "2,D")]
+op.map_cbpref[0xD3] = [op_set_r,        (2, "SET", "2,E")]
+op.map_cbpref[0xD4] = [op_set_r,        (2, "SET", "2,H")]
+op.map_cbpref[0xD5] = [op_set_r,        (2, "SET", "2,L")]
+op.map_cbpref[0xD6] = [op_set_hlmem,    (2, "SET", "2,(HL)")]
+op.map_cbpref[0xDF] = [op_set_r,        (2, "SET", "3,A")]
+op.map_cbpref[0xD8] = [op_set_r,        (2, "SET", "3,B")]
+op.map_cbpref[0xD9] = [op_set_r,        (2, "SET", "3,C")]
+op.map_cbpref[0xDA] = [op_set_r,        (2, "SET", "3,D")]
+op.map_cbpref[0xDB] = [op_set_r,        (2, "SET", "3,E")]
+op.map_cbpref[0xDC] = [op_set_r,        (2, "SET", "3,H")]
+op.map_cbpref[0xDD] = [op_set_r,        (2, "SET", "3,L")]
+op.map_cbpref[0xDE] = [op_set_hlmem,    (2, "SET", "3,(HL)")]
+op.map_cbpref[0xE7] = [op_set_r,        (2, "SET", "4,A")]
+op.map_cbpref[0xE0] = [op_set_r,        (2, "SET", "4,B")]
+op.map_cbpref[0xE1] = [op_set_r,        (2, "SET", "4,C")]
+op.map_cbpref[0xE2] = [op_set_r,        (2, "SET", "4,D")]
+op.map_cbpref[0xE3] = [op_set_r,        (2, "SET", "4,E")]
+op.map_cbpref[0xE4] = [op_set_r,        (2, "SET", "4,H")]
+op.map_cbpref[0xE5] = [op_set_r,        (2, "SET", "4,L")]
+op.map_cbpref[0xE6] = [op_set_hlmem,    (2, "SET", "4,(HL)")]
+op.map_cbpref[0xEF] = [op_set_r,        (2, "SET", "5,A")]
+op.map_cbpref[0xE8] = [op_set_r,        (2, "SET", "5,B")]
+op.map_cbpref[0xE9] = [op_set_r,        (2, "SET", "5,C")]
+op.map_cbpref[0xEA] = [op_set_r,        (2, "SET", "5,D")]
+op.map_cbpref[0xEB] = [op_set_r,        (2, "SET", "5,E")]
+op.map_cbpref[0xEC] = [op_set_r,        (2, "SET", "5,H")]
+op.map_cbpref[0xED] = [op_set_r,        (2, "SET", "5,L")]
+op.map_cbpref[0xEE] = [op_set_hlmem,    (2, "SET", "5,(HL)")]
+op.map_cbpref[0xF7] = [op_set_r,        (2, "SET", "6,A")]
+op.map_cbpref[0xF0] = [op_set_r,        (2, "SET", "6,B")]
+op.map_cbpref[0xF1] = [op_set_r,        (2, "SET", "6,C")]
+op.map_cbpref[0xF2] = [op_set_r,        (2, "SET", "6,D")]
+op.map_cbpref[0xF3] = [op_set_r,        (2, "SET", "6,E")]
+op.map_cbpref[0xF4] = [op_set_r,        (2, "SET", "6,H")]
+op.map_cbpref[0xF5] = [op_set_r,        (2, "SET", "6,L")]
+op.map_cbpref[0xF6] = [op_set_hlmem,    (2, "SET", "6,(HL)")]
+op.map_cbpref[0xFF] = [op_set_r,        (2, "SET", "7,A")]
+op.map_cbpref[0xF8] = [op_set_r,        (2, "SET", "7,B")]
+op.map_cbpref[0xF9] = [op_set_r,        (2, "SET", "7,C")]
+op.map_cbpref[0xFA] = [op_set_r,        (2, "SET", "7,D")]
+op.map_cbpref[0xFB] = [op_set_r,        (2, "SET", "7,E")]
+op.map_cbpref[0xFC] = [op_set_r,        (2, "SET", "7,H")]
+op.map_cbpref[0xFD] = [op_set_r,        (2, "SET", "7,L")]
+op.map_cbpref[0xFE] = [op_set_hlmem,    (2, "SET", "7,(HL)")]
+op.map_cbpref[0x87] = [op_res_r,        (2, "RES", "0,A")]
+op.map_cbpref[0x80] = [op_res_r,        (2, "RES", "0,B")]
+op.map_cbpref[0x81] = [op_res_r,        (2, "RES", "0,C")]
+op.map_cbpref[0x82] = [op_res_r,        (2, "RES", "0,D")]
+op.map_cbpref[0x83] = [op_res_r,        (2, "RES", "0,E")]
+op.map_cbpref[0x84] = [op_res_r,        (2, "RES", "0,H")]
+op.map_cbpref[0x85] = [op_res_r,        (2, "RES", "0,L")]
+op.map_cbpref[0x86] = [op_res_hlmem,    (2, "RES", "0,(HL)")]
+op.map_cbpref[0x8F] = [op_res_r,        (2, "RES", "1,A")]
+op.map_cbpref[0x88] = [op_res_r,        (2, "RES", "1,B")]
+op.map_cbpref[0x89] = [op_res_r,        (2, "RES", "1,C")]
+op.map_cbpref[0x8A] = [op_res_r,        (2, "RES", "1,D")]
+op.map_cbpref[0x8B] = [op_res_r,        (2, "RES", "1,E")]
+op.map_cbpref[0x8C] = [op_res_r,        (2, "RES", "1,H")]
+op.map_cbpref[0x8D] = [op_res_r,        (2, "RES", "1,L")]
+op.map_cbpref[0x8E] = [op_res_hlmem,    (2, "RES", "1,(HL)")]
+op.map_cbpref[0x97] = [op_res_r,        (2, "RES", "2,A")]
+op.map_cbpref[0x90] = [op_res_r,        (2, "RES", "2,B")]
+op.map_cbpref[0x91] = [op_res_r,        (2, "RES", "2,C")]
+op.map_cbpref[0x92] = [op_res_r,        (2, "RES", "2,D")]
+op.map_cbpref[0x93] = [op_res_r,        (2, "RES", "2,E")]
+op.map_cbpref[0x94] = [op_res_r,        (2, "RES", "2,H")]
+op.map_cbpref[0x95] = [op_res_r,        (2, "RES", "2,L")]
+op.map_cbpref[0x96] = [op_res_hlmem,    (2, "RES", "2,(HL)")]
+op.map_cbpref[0x9F] = [op_res_r,        (2, "RES", "3,A")]
+op.map_cbpref[0x98] = [op_res_r,        (2, "RES", "3,B")]
+op.map_cbpref[0x99] = [op_res_r,        (2, "RES", "3,C")]
+op.map_cbpref[0x9A] = [op_res_r,        (2, "RES", "3,D")]
+op.map_cbpref[0x9B] = [op_res_r,        (2, "RES", "3,E")]
+op.map_cbpref[0x9C] = [op_res_r,        (2, "RES", "3,H")]
+op.map_cbpref[0x9D] = [op_res_r,        (2, "RES", "3,L")]
+op.map_cbpref[0x9E] = [op_res_hlmem,    (2, "RES", "3,(HL)")]
+op.map_cbpref[0xA7] = [op_res_r,        (2, "RES", "4,A")]
+op.map_cbpref[0xA0] = [op_res_r,        (2, "RES", "4,B")]
+op.map_cbpref[0xA1] = [op_res_r,        (2, "RES", "4,C")]
+op.map_cbpref[0xA2] = [op_res_r,        (2, "RES", "4,D")]
+op.map_cbpref[0xA3] = [op_res_r,        (2, "RES", "4,E")]
+op.map_cbpref[0xA4] = [op_res_r,        (2, "RES", "4,H")]
+op.map_cbpref[0xA5] = [op_res_r,        (2, "RES", "4,L")]
+op.map_cbpref[0xA6] = [op_res_hlmem,    (2, "RES", "4,(HL)")]
+op.map_cbpref[0xAF] = [op_res_r,        (2, "RES", "5,A")]
+op.map_cbpref[0xA8] = [op_res_r,        (2, "RES", "5,B")]
+op.map_cbpref[0xA9] = [op_res_r,        (2, "RES", "5,C")]
+op.map_cbpref[0xAA] = [op_res_r,        (2, "RES", "5,D")]
+op.map_cbpref[0xAB] = [op_res_r,        (2, "RES", "5,E")]
+op.map_cbpref[0xAC] = [op_res_r,        (2, "RES", "5,H")]
+op.map_cbpref[0xAD] = [op_res_r,        (2, "RES", "5,L")]
+op.map_cbpref[0xAE] = [op_res_hlmem,    (2, "RES", "5,(HL)")]
+op.map_cbpref[0xB7] = [op_res_r,        (2, "RES", "6,A")]
+op.map_cbpref[0xB0] = [op_res_r,        (2, "RES", "6,B")]
+op.map_cbpref[0xB1] = [op_res_r,        (2, "RES", "6,C")]
+op.map_cbpref[0xB2] = [op_res_r,        (2, "RES", "6,D")]
+op.map_cbpref[0xB3] = [op_res_r,        (2, "RES", "6,E")]
+op.map_cbpref[0xB4] = [op_res_r,        (2, "RES", "6,H")]
+op.map_cbpref[0xB5] = [op_res_r,        (2, "RES", "6,L")]
+op.map_cbpref[0xB6] = [op_res_hlmem,    (2, "RES", "6,(HL)")]
+op.map_cbpref[0xBF] = [op_res_r,        (2, "RES", "7,A")]
+op.map_cbpref[0xB8] = [op_res_r,        (2, "RES", "7,B")]
+op.map_cbpref[0xB9] = [op_res_r,        (2, "RES", "7,C")]
+op.map_cbpref[0xBA] = [op_res_r,        (2, "RES", "7,D")]
+op.map_cbpref[0xBB] = [op_res_r,        (2, "RES", "7,E")]
+op.map_cbpref[0xBC] = [op_res_r,        (2, "RES", "7,H")]
+op.map_cbpref[0xBD] = [op_res_r,        (2, "RES", "7,L")]
+op.map_cbpref[0xBE] = [op_res_hlmem,    (2, "RES", "7,(HL)")]
 
-op.map_nopref[0x7F] = [op_ld_r1_r2,     "LD", "A,A"]
-op.map_nopref[0x78] = [op_ld_r1_r2,     "LD", "A,B"]
-op.map_nopref[0x79] = [op_ld_r1_r2,     "LD", "A,C"]
-op.map_nopref[0x7A] = [op_ld_r1_r2,     "LD", "A,D"]
-op.map_nopref[0x7B] = [op_ld_r1_r2,     "LD", "A,E"]
-op.map_nopref[0x7C] = [op_ld_r1_r2,     "LD", "A,H"]
-op.map_nopref[0x7D] = [op_ld_r1_r2,     "LD", "A,L"]
-op.map_nopref[0x47] = [op_ld_r1_r2,     "LD", "B,A"]
-op.map_nopref[0x40] = [op_ld_r1_r2,     "LD", "B,B"]
-op.map_nopref[0x41] = [op_ld_r1_r2,     "LD", "B,C"]
-op.map_nopref[0x42] = [op_ld_r1_r2,     "LD", "B,D"]
-op.map_nopref[0x43] = [op_ld_r1_r2,     "LD", "B,E"]
-op.map_nopref[0x44] = [op_ld_r1_r2,     "LD", "B,H"]
-op.map_nopref[0x45] = [op_ld_r1_r2,     "LD", "B,L"]
-op.map_nopref[0x4F] = [op_ld_r1_r2,     "LD", "C,A"]
-op.map_nopref[0x48] = [op_ld_r1_r2,     "LD", "C,B"]
-op.map_nopref[0x49] = [op_ld_r1_r2,     "LD", "C,C"]
-op.map_nopref[0x4A] = [op_ld_r1_r2,     "LD", "C,D"]
-op.map_nopref[0x4B] = [op_ld_r1_r2,     "LD", "C,E"]
-op.map_nopref[0x4C] = [op_ld_r1_r2,     "LD", "C,H"]
-op.map_nopref[0x4D] = [op_ld_r1_r2,     "LD", "C,L"]
-op.map_nopref[0x57] = [op_ld_r1_r2,     "LD", "D,A"]
-op.map_nopref[0x50] = [op_ld_r1_r2,     "LD", "D,B"]
-op.map_nopref[0x51] = [op_ld_r1_r2,     "LD", "D,C"]
-op.map_nopref[0x52] = [op_ld_r1_r2,     "LD", "D,D"]
-op.map_nopref[0x53] = [op_ld_r1_r2,     "LD", "D,E"]
-op.map_nopref[0x54] = [op_ld_r1_r2,     "LD", "D,H"]
-op.map_nopref[0x55] = [op_ld_r1_r2,     "LD", "D,L"]
-op.map_nopref[0x5F] = [op_ld_r1_r2,     "LD", "E,A"]
-op.map_nopref[0x58] = [op_ld_r1_r2,     "LD", "E,B"]
-op.map_nopref[0x59] = [op_ld_r1_r2,     "LD", "E,C"]
-op.map_nopref[0x5A] = [op_ld_r1_r2,     "LD", "E,D"]
-op.map_nopref[0x5B] = [op_ld_r1_r2,     "LD", "E,E"]
-op.map_nopref[0x5C] = [op_ld_r1_r2,     "LD", "E,H"]
-op.map_nopref[0x5D] = [op_ld_r1_r2,     "LD", "E,L"]
-op.map_nopref[0x67] = [op_ld_r1_r2,     "LD", "H,A"]
-op.map_nopref[0x60] = [op_ld_r1_r2,     "LD", "H,B"]
-op.map_nopref[0x61] = [op_ld_r1_r2,     "LD", "H,C"]
-op.map_nopref[0x62] = [op_ld_r1_r2,     "LD", "H,D"]
-op.map_nopref[0x63] = [op_ld_r1_r2,     "LD", "H,E"]
-op.map_nopref[0x64] = [op_ld_r1_r2,     "LD", "H,H"]
-op.map_nopref[0x65] = [op_ld_r1_r2,     "LD", "H,L"] 
-op.map_nopref[0x6F] = [op_ld_r1_r2,     "LD", "L,A"]
-op.map_nopref[0x68] = [op_ld_r1_r2,     "LD", "L,B"]
-op.map_nopref[0x69] = [op_ld_r1_r2,     "LD", "L,C"]
-op.map_nopref[0x6A] = [op_ld_r1_r2,     "LD", "L,D"]
-op.map_nopref[0x6B] = [op_ld_r1_r2,     "LD", "L,E"]
-op.map_nopref[0x6C] = [op_ld_r1_r2,     "LD", "L,H"]
-op.map_nopref[0x6D] = [op_ld_r1_r2,     "LD", "L,L"]
-op.map_nopref[0x3E] = [op_ld_r1_n,      "LD", "A,n"]
-op.map_nopref[0x06] = [op_ld_r1_n,      "LD", "B,n"]
-op.map_nopref[0x0E] = [op_ld_r1_n,      "LD", "C,n"]
-op.map_nopref[0x16] = [op_ld_r1_n,      "LD", "D,n"]
-op.map_nopref[0x1E] = [op_ld_r1_n,      "LD", "E,n"]
-op.map_nopref[0x26] = [op_ld_r1_n,      "LD", "H,n"]
-op.map_nopref[0x2E] = [op_ld_r1_n,      "LD", "L,n"]
-op.map_nopref[0xEA] = [op_ld_nnmem_a,   "LD", "(nn),A"]
-op.map_nopref[0x02] = [op_ld_bcmem_a,   "LD", "(BC),A"]
-op.map_nopref[0x12] = [op_ld_demem_a,   "LD", "(DE),A"]
-op.map_nopref[0x77] = [op_ld_hlmem_r2,  "LD", "(HL),A"]
-op.map_nopref[0x70] = [op_ld_hlmem_r2,  "LD", "(HL),B"]
-op.map_nopref[0x71] = [op_ld_hlmem_r2,  "LD", "(HL),C"]
-op.map_nopref[0x72] = [op_ld_hlmem_r2,  "LD", "(HL),D"]
-op.map_nopref[0x73] = [op_ld_hlmem_r2,  "LD", "(HL),E"]
-op.map_nopref[0x74] = [op_ld_hlmem_r2,  "LD", "(HL),H"]
-op.map_nopref[0x75] = [op_ld_hlmem_r2,  "LD", "(HL),L"]
-op.map_nopref[0x36] = [op_ld_hlmem_n,   "LD", "(HL),n"]
-op.map_nopref[0xFA] = [op_ld_a_nnmem,   "LD", "A,(nn)"]
-op.map_nopref[0x0A] = [op_ld_a_bcmem,   "LD", "A,(BC)"]
-op.map_nopref[0x1A] = [op_ld_a_demem,   "LD", "A,(DE)"]
-op.map_nopref[0x7E] = [op_ld_r1_hlmem,  "LD", "A,(HL)"]
-op.map_nopref[0x46] = [op_ld_r1_hlmem,  "LD", "B,(HL)"]
-op.map_nopref[0x4E] = [op_ld_r1_hlmem,  "LD", "C,(HL)"]
-op.map_nopref[0x56] = [op_ld_r1_hlmem,  "LD", "D,(HL)"]
-op.map_nopref[0x5E] = [op_ld_r1_hlmem,  "LD", "E,(HL)"]
-op.map_nopref[0x66] = [op_ld_r1_hlmem,  "LD", "H,(HL)"]
-op.map_nopref[0x6E] = [op_ld_r1_hlmem,  "LD", "L,(HL)"]
-op.map_nopref[0xF2] = [op_ld_a_ff00c,   "LD", "A,(0xFF00+C)"]
-op.map_nopref[0xE2] = [op_ld_ff00c_a,   "LD", "(0xFF00+C),A"]
-op.map_nopref[0xF0] = [op_ld_a_ff00n,   "LD", "A,(0xFF00+n)"]
-op.map_nopref[0xE0] = [op_ld_ff00n_a,   "LD", "(0xFF00+n),A"]
-op.map_nopref[0x3A] = [op_ldd_a_hlmem,  "LD", "A,(HL-)"]
-op.map_nopref[0x32] = [op_ldd_hlmem_a,  "LD", "(HL-),A"]
-op.map_nopref[0x2A] = [op_ldi_a_hlmem,  "LD", "A,(HL+)"]
-op.map_nopref[0x22] = [op_ldi_hlmem_a,  "LD", "(HL+),A"]
-    
-op.map_nopref[0x01] = [op_ld_rp_nn,     "LD", "BC,nn"]
-op.map_nopref[0x11] = [op_ld_rp_nn,     "LD", "DE,nn"]
-op.map_nopref[0x21] = [op_ld_rp_nn,     "LD", "HL,nn"]
-op.map_nopref[0x31] = [op_ld_rp_nn,     "LD", "SP,nn"]
-op.map_nopref[0xF9] = [op_ld_sp_hl,     "LD", "SP,HL"]
-op.map_nopref[0xF8] = [op_ldhl_sp_n,    "LD", "HL,SP+n"]
-op.map_nopref[0x08] = [op_ld_nnmem_sp,  "LD", "(nn),SP"]
-    
-op.map_nopref[0xF5] = [op_push_af,      "PUSH", "AF"]
-op.map_nopref[0xC5] = [op_push_bc,      "PUSH", "BC"]
-op.map_nopref[0xD5] = [op_push_de,      "PUSH", "DE"]
-op.map_nopref[0xE5] = [op_push_hl,      "PUSH", "HL"]
-    
-op.map_nopref[0xF1] = [op_pop_af,       "POP", "AF"]
-op.map_nopref[0xC1] = [op_pop_bc,       "POP", "BC"]
-op.map_nopref[0xD1] = [op_pop_de,       "POP", "DE"]
-op.map_nopref[0xE1] = [op_pop_hl,       "POP", "HL"]
-    
-op.map_nopref[0x87] = [op_add_a_r2,     "ADD", "A,A"]
-op.map_nopref[0x80] = [op_add_a_r2,     "ADD", "A,B"]
-op.map_nopref[0x81] = [op_add_a_r2,     "ADD", "A,C"]
-op.map_nopref[0x82] = [op_add_a_r2,     "ADD", "A,D"]
-op.map_nopref[0x83] = [op_add_a_r2,     "ADD", "A,E"]
-op.map_nopref[0x84] = [op_add_a_r2,     "ADD", "A,H"]
-op.map_nopref[0x85] = [op_add_a_r2,     "ADD", "A,L"]
-op.map_nopref[0x86] = [op_add_a_hlmem,  "ADD", "A,(HL)"]
-op.map_nopref[0xC6] = [op_add_a_n,      "ADD", "A,n"]
-    
-op.map_nopref[0x8F] = [op_adc_a_r2,     "ADC", "A,A"]
-op.map_nopref[0x88] = [op_adc_a_r2,     "ADC", "A,B"]
-op.map_nopref[0x89] = [op_adc_a_r2,     "ADC", "A,C"]
-op.map_nopref[0x8A] = [op_adc_a_r2,     "ADC", "A,D"]
-op.map_nopref[0x8B] = [op_adc_a_r2,     "ADC", "A,E"]
-op.map_nopref[0x8C] = [op_adc_a_r2,     "ADC", "A,H"]
-op.map_nopref[0x8D] = [op_adc_a_r2,     "ADC", "A,L"]
-op.map_nopref[0x8E] = [op_adc_a_hlmem,  "ADC", "A,(HL)"]
-op.map_nopref[0xCE] = [op_adc_a_n,      "ADC", "A,n"]
-    
-op.map_nopref[0x97] = [op_sub_a_r2,     "SUB", "A,A"]
-op.map_nopref[0x90] = [op_sub_a_r2,     "SUB", "A,B"]
-op.map_nopref[0x91] = [op_sub_a_r2,     "SUB", "A,C"]
-op.map_nopref[0x92] = [op_sub_a_r2,     "SUB", "A,D"]
-op.map_nopref[0x93] = [op_sub_a_r2,     "SUB", "A,E"]
-op.map_nopref[0x94] = [op_sub_a_r2,     "SUB", "A,H"]
-op.map_nopref[0x95] = [op_sub_a_r2,     "SUB", "A,L"]
-op.map_nopref[0x96] = [op_sub_a_hlmem,  "SUB", "A,(HL)"]
-op.map_nopref[0xD6] = [op_sub_a_n,      "SUB", "A,n"]
-    
-op.map_nopref[0x9F] = [op_sbc_a_r2,     "SBC", "A,A"]
-op.map_nopref[0x98] = [op_sbc_a_r2,     "SBC", "A,B"]
-op.map_nopref[0x99] = [op_sbc_a_r2,     "SBC", "A,C"]
-op.map_nopref[0x9A] = [op_sbc_a_r2,     "SBC", "A,D"]
-op.map_nopref[0x9B] = [op_sbc_a_r2,     "SBC", "A,E"]
-op.map_nopref[0x9C] = [op_sbc_a_r2,     "SBC", "A,H"]
-op.map_nopref[0x9D] = [op_sbc_a_r2,     "SBC", "A,L"]
-op.map_nopref[0x9E] = [op_sbc_a_hlmem,  "SBC", "A,(HL)"]
-op.map_nopref[0xDE] = [op_sbc_a_n,      "SBC", "A,n"]
-    
-op.map_nopref[0xA7] = [op_and_a_r2,     "AND", "A"]
-op.map_nopref[0xA0] = [op_and_a_r2,     "AND", "B"]
-op.map_nopref[0xA1] = [op_and_a_r2,     "AND", "C"]
-op.map_nopref[0xA2] = [op_and_a_r2,     "AND", "D"]
-op.map_nopref[0xA3] = [op_and_a_r2,     "AND", "E"]
-op.map_nopref[0xA4] = [op_and_a_r2,     "AND", "H"]
-op.map_nopref[0xA5] = [op_and_a_r2,     "AND", "L"]
-op.map_nopref[0xA6] = [op_and_a_hlmem,  "AND", "(HL)"]
-op.map_nopref[0xE6] = [op_and_a_n,      "AND", "n"]
-    
-op.map_nopref[0xB7] = [op_or_a_r2,      "OR", "A"]
-op.map_nopref[0xB0] = [op_or_a_r2,      "OR", "B"]
-op.map_nopref[0xB1] = [op_or_a_r2,      "OR", "C"]
-op.map_nopref[0xB2] = [op_or_a_r2,      "OR", "D"]
-op.map_nopref[0xB3] = [op_or_a_r2,      "OR", "E"]
-op.map_nopref[0xB4] = [op_or_a_r2,      "OR", "H"]
-op.map_nopref[0xB5] = [op_or_a_r2,      "OR", "L"]
-op.map_nopref[0xB6] = [op_or_a_hlmem,   "OR", "(HL)"]
-op.map_nopref[0xF6] = [op_or_a_n,       "OR", "n"]
-    
-op.map_nopref[0xAF] = [op_xor_a_r2,     "XOR", "A"]
-op.map_nopref[0xA8] = [op_xor_a_r2,     "XOR", "B"]
-op.map_nopref[0xA9] = [op_xor_a_r2,     "XOR", "C"]
-op.map_nopref[0xAA] = [op_xor_a_r2,     "XOR", "D"]
-op.map_nopref[0xAB] = [op_xor_a_r2,     "XOR", "E"]
-op.map_nopref[0xAC] = [op_xor_a_r2,     "XOR", "H"]
-op.map_nopref[0xAD] = [op_xor_a_r2,     "XOR", "L"]
-op.map_nopref[0xAE] = [op_xor_a_hlmem,  "XOR", "(HL)"]
-op.map_nopref[0xEE] = [op_xor_a_n,      "XOR", "n"]
-    
-op.map_nopref[0xBF] = [op_cp_a_r2,      "CP", "A"]
-op.map_nopref[0xB8] = [op_cp_a_r2,      "CP", "B"]
-op.map_nopref[0xB9] = [op_cp_a_r2,      "CP", "C"]
-op.map_nopref[0xBA] = [op_cp_a_r2,      "CP", "D"]
-op.map_nopref[0xBB] = [op_cp_a_r2,      "CP", "E"]
-op.map_nopref[0xBC] = [op_cp_a_r2,      "CP", "H"]
-op.map_nopref[0xBD] = [op_cp_a_r2,      "CP", "L"]
-op.map_nopref[0xBE] = [op_cp_a_hlmem,   "CP", "(HL)"]
-op.map_nopref[0xFE] = [op_cp_a_n,       "CP", "n"]
-    
-op.map_nopref[0x3C] = [op_inc_r1,       "INC", "A"]
-op.map_nopref[0x04] = [op_inc_r1,       "INC", "B"]
-op.map_nopref[0x0C] = [op_inc_r1,       "INC", "C"]
-op.map_nopref[0x14] = [op_inc_r1,       "INC", "D"]
-op.map_nopref[0x1C] = [op_inc_r1,       "INC", "E"]
-op.map_nopref[0x24] = [op_inc_r1,       "INC", "H"]
-op.map_nopref[0x2C] = [op_inc_r1,       "INC", "L"]
-op.map_nopref[0x34] = [op_inc_hlmem,    "INC", "(HL)"]
-    
-op.map_nopref[0x3D] = [op_dec_r1,       "DEC", "A"]
-op.map_nopref[0x05] = [op_dec_r1,       "DEC", "B"]
-op.map_nopref[0x0D] = [op_dec_r1,       "DEC", "C"]
-op.map_nopref[0x15] = [op_dec_r1,       "DEC", "D"]
-op.map_nopref[0x1D] = [op_dec_r1,       "DEC", "E"]
-op.map_nopref[0x25] = [op_dec_r1,       "DEC", "H"]
-op.map_nopref[0x2D] = [op_dec_r1,       "DEC", "L"]
-op.map_nopref[0x35] = [op_dec_hlmem,    "DEC", "(HL)"]
-    
-op.map_nopref[0x09] = [op_add_hl_rp,    "ADD", "HL,BC"]
-op.map_nopref[0x19] = [op_add_hl_rp,    "ADD", "HL,DE"]
-op.map_nopref[0x29] = [op_add_hl_rp,    "ADD", "HL,HL"]
-op.map_nopref[0x39] = [op_add_hl_rp,    "ADD", "HL,SP"]
-op.map_nopref[0xE8] = [op_add_sp_n,     "ADD", "SP,n"]
-    
-op.map_nopref[0x03] = [op_inc_rp,       "INC", "BC"]
-op.map_nopref[0x13] = [op_inc_rp,       "INC", "DE"]
-op.map_nopref[0x23] = [op_inc_rp,       "INC", "HL"]
-op.map_nopref[0x33] = [op_inc_rp,       "INC", "SP"]
-    
-op.map_nopref[0x0B] = [op_dec_rp,       "DEC", "BC"]
-op.map_nopref[0x1B] = [op_dec_rp,       "DEC", "DE"]
-op.map_nopref[0x2B] = [op_dec_rp,       "DEC", "HL"]
-op.map_nopref[0x3B] = [op_dec_rp,       "DEC", "SP"]
-
-op.map_nopref[0x27] = [op_daa,          "DAA", ""]
-op.map_nopref[0x2F] = [op_cpl,          "CPL", ""]
-op.map_nopref[0x3F] = [op_ccf,          "CCF", ""]
-op.map_nopref[0x37] = [op_scf,          "SCF", ""]
-op.map_nopref[0x00] = [op_nop,          "NOP", ""]
-op.map_nopref[0x76] = [op_halt,         "HALT", ""]
-op.map_nopref[0x10] = [op_stop,         "STOP", ""]
-op.map_nopref[0xF3] = [op_di,           "DI", ""]
-
-op.map_nopref[0x07] = [op_rlc_a,        "RLCA", ""]
-op.map_nopref[0x17] = [op_rl_a,         "RLA", ""]
-op.map_nopref[0x0F] = [op_rrc_a,        "RRCA", ""]
-op.map_nopref[0x1F] = [op_rr_a,         "RRA", ""]
-op.map_nopref[0x1F] = [op_rr_a,         "RRA", ""]
-
-op.map_nopref[0xC3] = [op_jp_nn,        "JP", "nn"]
-op.map_nopref[0xC2] = [op_jp_nz_nn,     "JP", "NZ,nn"]
-op.map_nopref[0xCA] = [op_jp_z_nn,      "JP", "Z,nn"]
-op.map_nopref[0xD2] = [op_jp_nc_nn,     "JP", "NC,nn"]
-op.map_nopref[0xDA] = [op_jp_c_nn,      "JP", "C,nn"]
-op.map_nopref[0xE9] = [op_jp_hl,        "JP", "(HL)"]
-
-op.map_nopref[0x18] = [op_jr_n,         "JR", "n"]
-op.map_nopref[0x20] = [op_jr_nz_n,      "JR", "NZ,n"]
-op.map_nopref[0x28] = [op_jr_z_n,       "JR", "Z,n"]
-op.map_nopref[0x30] = [op_jr_nc_n,      "JR", "NC,n"]
-op.map_nopref[0x38] = [op_jr_c_n,       "JR", "C,n"]
-
-op.map_nopref[0xCD] = [op_call_nn,      "CALL", "nn"]
-op.map_nopref[0xC4] = [op_call_nz_nn,   "CALL", "NZ,nn"]
-op.map_nopref[0xCC] = [op_call_z_nn,    "CALL", "Z,nn"]
-op.map_nopref[0xD4] = [op_call_nc_nn,   "CALL", "NC,nn"]
-op.map_nopref[0xDC] = [op_call_c_nn,    "CALL", "C,nn"]
-
-### OP MAP (CB-PREFIXED) ###########################################################
-op.map_cbpref = [op_xxx]*256
-
-op.map_cbpref[0x37] = [op_swap_r,       "SWAP", "A"]
-op.map_cbpref[0x30] = [op_swap_r,       "SWAP", "B"]
-op.map_cbpref[0x31] = [op_swap_r,       "SWAP", "C"]
-op.map_cbpref[0x32] = [op_swap_r,       "SWAP", "D"]
-op.map_cbpref[0x33] = [op_swap_r,       "SWAP", "E"]
-op.map_cbpref[0x34] = [op_swap_r,       "SWAP", "H"]
-op.map_cbpref[0x35] = [op_swap_r,       "SWAP", "L"]
-op.map_cbpref[0x36] = [op_swap_hlmem,   "SWAP", "(HL)"]
-
-op.map_cbpref[0x07] = [op_rlc_r,        "RLC", "A"]
-op.map_cbpref[0x00] = [op_rlc_r,        "RLC", "B"]
-op.map_cbpref[0x01] = [op_rlc_r,        "RLC", "C"]
-op.map_cbpref[0x02] = [op_rlc_r,        "RLC", "D"]
-op.map_cbpref[0x03] = [op_rlc_r,        "RLC", "E"]
-op.map_cbpref[0x04] = [op_rlc_r,        "RLC", "H"]
-op.map_cbpref[0x05] = [op_rlc_r,        "RLC", "L"]
-op.map_cbpref[0x06] = [op_rlc_hlmem,    "RLC", "(HL)"]
-
-op.map_cbpref[0x17] = [op_rl_r,         "RL", "A"]
-op.map_cbpref[0x10] = [op_rl_r,         "RL", "B"]
-op.map_cbpref[0x11] = [op_rl_r,         "RL", "C"]
-op.map_cbpref[0x12] = [op_rl_r,         "RL", "D"]
-op.map_cbpref[0x13] = [op_rl_r,         "RL", "E"]
-op.map_cbpref[0x14] = [op_rl_r,         "RL", "H"]
-op.map_cbpref[0x15] = [op_rl_r,         "RL", "L"]
-op.map_cbpref[0x16] = [op_rl_hlmem,     "RL", "(HL)"]
-
-op.map_cbpref[0x0F] = [op_rrc_r,        "RRC", "A"]
-op.map_cbpref[0x08] = [op_rrc_r,        "RRC", "B"]
-op.map_cbpref[0x09] = [op_rrc_r,        "RRC", "C"]
-op.map_cbpref[0x0A] = [op_rrc_r,        "RRC", "D"]
-op.map_cbpref[0x0B] = [op_rrc_r,        "RRC", "E"]
-op.map_cbpref[0x0C] = [op_rrc_r,        "RRC", "H"]
-op.map_cbpref[0x0D] = [op_rrc_r,        "RRC", "L"]
-op.map_cbpref[0x0E] = [op_rrc_hlmem,    "RRC", "(HL)"]
-
-op.map_cbpref[0x1F] = [op_rr_r,         "RR", "A"]
-op.map_cbpref[0x18] = [op_rr_r,         "RR", "B"]
-op.map_cbpref[0x19] = [op_rr_r,         "RR", "C"]
-op.map_cbpref[0x1A] = [op_rr_r,         "RR", "D"]
-op.map_cbpref[0x1B] = [op_rr_r,         "RR", "E"]
-op.map_cbpref[0x1C] = [op_rr_r,         "RR", "H"]
-op.map_cbpref[0x1D] = [op_rr_r,         "RR", "L"]
-op.map_cbpref[0x1E] = [op_rr_hlmem,     "RR", "(HL)"]
-
-op.map_cbpref[0x27] = [op_sla_r,        "SLA", "A"]
-op.map_cbpref[0x20] = [op_sla_r,        "SLA", "B"]
-op.map_cbpref[0x21] = [op_sla_r,        "SLA", "C"]
-op.map_cbpref[0x22] = [op_sla_r,        "SLA", "D"]
-op.map_cbpref[0x23] = [op_sla_r,        "SLA", "E"]
-op.map_cbpref[0x24] = [op_sla_r,        "SLA", "H"]
-op.map_cbpref[0x25] = [op_sla_r,        "SLA", "L"]
-op.map_cbpref[0x26] = [op_sla_hlmem,    "SLA", "(HL)"]
-    
-op.map_cbpref[0x2F] = [op_sra_r,        "SRA", "A"]
-op.map_cbpref[0x28] = [op_sra_r,        "SRA", "B"]
-op.map_cbpref[0x29] = [op_sra_r,        "SRA", "C"]
-op.map_cbpref[0x2A] = [op_sra_r,        "SRA", "D"]
-op.map_cbpref[0x2B] = [op_sra_r,        "SRA", "E"]
-op.map_cbpref[0x2C] = [op_sra_r,        "SRA", "H"]
-op.map_cbpref[0x2D] = [op_sra_r,        "SRA", "L"]
-op.map_cbpref[0x2E] = [op_sra_hlmem,    "SRA", "(HL)"]
-    
-op.map_cbpref[0x3F] = [op_srl_r,        "SRL", "A"]
-op.map_cbpref[0x38] = [op_srl_r,        "SRL", "B"]
-op.map_cbpref[0x39] = [op_srl_r,        "SRL", "C"]
-op.map_cbpref[0x3A] = [op_srl_r,        "SRL", "D"]
-op.map_cbpref[0x3B] = [op_srl_r,        "SRL", "E"]
-op.map_cbpref[0x3C] = [op_srl_r,        "SRL", "H"]
-op.map_cbpref[0x3D] = [op_srl_r,        "SRL", "L"]
-op.map_cbpref[0x3E] = [op_srl_hlmem,    "SRL", "(HL)"]
-
-op.map_cbpref[0x47] = [op_bit_r,        "BIT", "0,A"]
-op.map_cbpref[0x40] = [op_bit_r,        "BIT", "0,B"]
-op.map_cbpref[0x41] = [op_bit_r,        "BIT", "0,C"]
-op.map_cbpref[0x42] = [op_bit_r,        "BIT", "0,D"]
-op.map_cbpref[0x43] = [op_bit_r,        "BIT", "0,E"]
-op.map_cbpref[0x44] = [op_bit_r,        "BIT", "0,H"]
-op.map_cbpref[0x45] = [op_bit_r,        "BIT", "0,L"]
-op.map_cbpref[0x46] = [op_bit_hlmem,    "BIT", "0,(HL)"]
-op.map_cbpref[0x4F] = [op_bit_r,        "BIT", "1,A"]
-op.map_cbpref[0x48] = [op_bit_r,        "BIT", "1,B"]
-op.map_cbpref[0x49] = [op_bit_r,        "BIT", "1,C"]
-op.map_cbpref[0x4A] = [op_bit_r,        "BIT", "1,D"]
-op.map_cbpref[0x4B] = [op_bit_r,        "BIT", "1,E"]
-op.map_cbpref[0x4C] = [op_bit_r,        "BIT", "1,H"]
-op.map_cbpref[0x4D] = [op_bit_r,        "BIT", "1,L"]
-op.map_cbpref[0x4E] = [op_bit_hlmem,    "BIT", "1,(HL)"]
-op.map_cbpref[0x57] = [op_bit_r,        "BIT", "2,A"]
-op.map_cbpref[0x50] = [op_bit_r,        "BIT", "2,B"]
-op.map_cbpref[0x51] = [op_bit_r,        "BIT", "2,C"]
-op.map_cbpref[0x52] = [op_bit_r,        "BIT", "2,D"]
-op.map_cbpref[0x53] = [op_bit_r,        "BIT", "2,E"]
-op.map_cbpref[0x54] = [op_bit_r,        "BIT", "2,H"]
-op.map_cbpref[0x55] = [op_bit_r,        "BIT", "2,L"]
-op.map_cbpref[0x56] = [op_bit_hlmem,    "BIT", "2,(HL)"]
-op.map_cbpref[0x5F] = [op_bit_r,        "BIT", "3,A"]
-op.map_cbpref[0x58] = [op_bit_r,        "BIT", "3,B"]
-op.map_cbpref[0x59] = [op_bit_r,        "BIT", "3,C"]
-op.map_cbpref[0x5A] = [op_bit_r,        "BIT", "3,D"]
-op.map_cbpref[0x5B] = [op_bit_r,        "BIT", "3,E"]
-op.map_cbpref[0x5C] = [op_bit_r,        "BIT", "3,H"]
-op.map_cbpref[0x5D] = [op_bit_r,        "BIT", "3,L"]
-op.map_cbpref[0x5E] = [op_bit_hlmem,    "BIT", "3,(HL)"]
-op.map_cbpref[0x67] = [op_bit_r,        "BIT", "4,A"]
-op.map_cbpref[0x60] = [op_bit_r,        "BIT", "4,B"]
-op.map_cbpref[0x61] = [op_bit_r,        "BIT", "4,C"]
-op.map_cbpref[0x62] = [op_bit_r,        "BIT", "4,D"]
-op.map_cbpref[0x63] = [op_bit_r,        "BIT", "4,E"]
-op.map_cbpref[0x64] = [op_bit_r,        "BIT", "4,H"]
-op.map_cbpref[0x65] = [op_bit_r,        "BIT", "4,L"]
-op.map_cbpref[0x66] = [op_bit_hlmem,    "BIT", "4,(HL)"]
-op.map_cbpref[0x6F] = [op_bit_r,        "BIT", "5,A"]
-op.map_cbpref[0x68] = [op_bit_r,        "BIT", "5,B"]
-op.map_cbpref[0x69] = [op_bit_r,        "BIT", "5,C"]
-op.map_cbpref[0x6A] = [op_bit_r,        "BIT", "5,D"]
-op.map_cbpref[0x6B] = [op_bit_r,        "BIT", "5,E"]
-op.map_cbpref[0x6C] = [op_bit_r,        "BIT", "5,H"]
-op.map_cbpref[0x6D] = [op_bit_r,        "BIT", "5,L"]
-op.map_cbpref[0x6E] = [op_bit_hlmem,    "BIT", "5,(HL)"]
-op.map_cbpref[0x77] = [op_bit_r,        "BIT", "6,A"]
-op.map_cbpref[0x70] = [op_bit_r,        "BIT", "6,B"]
-op.map_cbpref[0x71] = [op_bit_r,        "BIT", "6,C"]
-op.map_cbpref[0x72] = [op_bit_r,        "BIT", "6,D"]
-op.map_cbpref[0x73] = [op_bit_r,        "BIT", "6,E"]
-op.map_cbpref[0x74] = [op_bit_r,        "BIT", "6,H"]
-op.map_cbpref[0x75] = [op_bit_r,        "BIT", "6,L"]
-op.map_cbpref[0x76] = [op_bit_hlmem,    "BIT", "6,(HL)"]
-op.map_cbpref[0x7F] = [op_bit_r,        "BIT", "7,A"]
-op.map_cbpref[0x78] = [op_bit_r,        "BIT", "7,B"]
-op.map_cbpref[0x79] = [op_bit_r,        "BIT", "7,C"]
-op.map_cbpref[0x7A] = [op_bit_r,        "BIT", "7,D"]
-op.map_cbpref[0x7B] = [op_bit_r,        "BIT", "7,E"]
-op.map_cbpref[0x7C] = [op_bit_r,        "BIT", "7,H"]
-op.map_cbpref[0x7D] = [op_bit_r,        "BIT", "7,L"]
-op.map_cbpref[0x7E] = [op_bit_hlmem,    "BIT", "7,(HL)"]
-
-op.map_cbpref[0xC7] = [op_set_r,        "SET", "0,A"]
-op.map_cbpref[0xC0] = [op_set_r,        "SET", "0,B"]
-op.map_cbpref[0xC1] = [op_set_r,        "SET", "0,C"]
-op.map_cbpref[0xC2] = [op_set_r,        "SET", "0,D"]
-op.map_cbpref[0xC3] = [op_set_r,        "SET", "0,E"]
-op.map_cbpref[0xC4] = [op_set_r,        "SET", "0,H"]
-op.map_cbpref[0xC5] = [op_set_r,        "SET", "0,L"]
-op.map_cbpref[0xC6] = [op_set_hlmem,    "SET", "0,(HL)"]
-op.map_cbpref[0xCF] = [op_set_r,        "SET", "1,A"]
-op.map_cbpref[0xC8] = [op_set_r,        "SET", "1,B"]
-op.map_cbpref[0xC9] = [op_set_r,        "SET", "1,C"]
-op.map_cbpref[0xCA] = [op_set_r,        "SET", "1,D"]
-op.map_cbpref[0xCB] = [op_set_r,        "SET", "1,E"]
-op.map_cbpref[0xCC] = [op_set_r,        "SET", "1,H"]
-op.map_cbpref[0xCD] = [op_set_r,        "SET", "1,L"]
-op.map_cbpref[0xCE] = [op_set_hlmem,    "SET", "1,(HL)"]
-op.map_cbpref[0xD7] = [op_set_r,        "SET", "2,A"]
-op.map_cbpref[0xD0] = [op_set_r,        "SET", "2,B"]
-op.map_cbpref[0xD1] = [op_set_r,        "SET", "2,C"]
-op.map_cbpref[0xD2] = [op_set_r,        "SET", "2,D"]
-op.map_cbpref[0xD3] = [op_set_r,        "SET", "2,E"]
-op.map_cbpref[0xD4] = [op_set_r,        "SET", "2,H"]
-op.map_cbpref[0xD5] = [op_set_r,        "SET", "2,L"]
-op.map_cbpref[0xD6] = [op_set_hlmem,    "SET", "2,(HL)"]
-op.map_cbpref[0xDF] = [op_set_r,        "SET", "3,A"]
-op.map_cbpref[0xD8] = [op_set_r,        "SET", "3,B"]
-op.map_cbpref[0xD9] = [op_set_r,        "SET", "3,C"]
-op.map_cbpref[0xDA] = [op_set_r,        "SET", "3,D"]
-op.map_cbpref[0xDB] = [op_set_r,        "SET", "3,E"]
-op.map_cbpref[0xDC] = [op_set_r,        "SET", "3,H"]
-op.map_cbpref[0xDD] = [op_set_r,        "SET", "3,L"]
-op.map_cbpref[0xDE] = [op_set_hlmem,    "SET", "3,(HL)"]
-op.map_cbpref[0xE7] = [op_set_r,        "SET", "4,A"]
-op.map_cbpref[0xE0] = [op_set_r,        "SET", "4,B"]
-op.map_cbpref[0xE1] = [op_set_r,        "SET", "4,C"]
-op.map_cbpref[0xE2] = [op_set_r,        "SET", "4,D"]
-op.map_cbpref[0xE3] = [op_set_r,        "SET", "4,E"]
-op.map_cbpref[0xE4] = [op_set_r,        "SET", "4,H"]
-op.map_cbpref[0xE5] = [op_set_r,        "SET", "4,L"]
-op.map_cbpref[0xE6] = [op_set_hlmem,    "SET", "4,(HL)"]
-op.map_cbpref[0xEF] = [op_set_r,        "SET", "5,A"]
-op.map_cbpref[0xE8] = [op_set_r,        "SET", "5,B"]
-op.map_cbpref[0xE9] = [op_set_r,        "SET", "5,C"]
-op.map_cbpref[0xEA] = [op_set_r,        "SET", "5,D"]
-op.map_cbpref[0xEB] = [op_set_r,        "SET", "5,E"]
-op.map_cbpref[0xEC] = [op_set_r,        "SET", "5,H"]
-op.map_cbpref[0xED] = [op_set_r,        "SET", "5,L"]
-op.map_cbpref[0xEE] = [op_set_hlmem,    "SET", "5,(HL)"]
-op.map_cbpref[0xF7] = [op_set_r,        "SET", "6,A"]
-op.map_cbpref[0xF0] = [op_set_r,        "SET", "6,B"]
-op.map_cbpref[0xF1] = [op_set_r,        "SET", "6,C"]
-op.map_cbpref[0xF2] = [op_set_r,        "SET", "6,D"]
-op.map_cbpref[0xF3] = [op_set_r,        "SET", "6,E"]
-op.map_cbpref[0xF4] = [op_set_r,        "SET", "6,H"]
-op.map_cbpref[0xF5] = [op_set_r,        "SET", "6,L"]
-op.map_cbpref[0xF6] = [op_set_hlmem,    "SET", "6,(HL)"]
-op.map_cbpref[0xFF] = [op_set_r,        "SET", "7,A"]
-op.map_cbpref[0xF8] = [op_set_r,        "SET", "7,B"]
-op.map_cbpref[0xF9] = [op_set_r,        "SET", "7,C"]
-op.map_cbpref[0xFA] = [op_set_r,        "SET", "7,D"]
-op.map_cbpref[0xFB] = [op_set_r,        "SET", "7,E"]
-op.map_cbpref[0xFC] = [op_set_r,        "SET", "7,H"]
-op.map_cbpref[0xFD] = [op_set_r,        "SET", "7,L"]
-op.map_cbpref[0xFE] = [op_set_hlmem,    "SET", "7,(HL)"]
-
-op.map_cbpref[0x87] = [op_res_r,        "RES", "0,A"]
-op.map_cbpref[0x80] = [op_res_r,        "RES", "0,B"]
-op.map_cbpref[0x81] = [op_res_r,        "RES", "0,C"]
-op.map_cbpref[0x82] = [op_res_r,        "RES", "0,D"]
-op.map_cbpref[0x83] = [op_res_r,        "RES", "0,E"]
-op.map_cbpref[0x84] = [op_res_r,        "RES", "0,H"]
-op.map_cbpref[0x85] = [op_res_r,        "RES", "0,L"]
-op.map_cbpref[0x86] = [op_res_hlmem,    "RES", "0,(HL)"]
-op.map_cbpref[0x8F] = [op_res_r,        "RES", "1,A"]
-op.map_cbpref[0x88] = [op_res_r,        "RES", "1,B"]
-op.map_cbpref[0x89] = [op_res_r,        "RES", "1,C"]
-op.map_cbpref[0x8A] = [op_res_r,        "RES", "1,D"]
-op.map_cbpref[0x8B] = [op_res_r,        "RES", "1,E"]
-op.map_cbpref[0x8C] = [op_res_r,        "RES", "1,H"]
-op.map_cbpref[0x8D] = [op_res_r,        "RES", "1,L"]
-op.map_cbpref[0x8E] = [op_res_hlmem,    "RES", "1,(HL)"]
-op.map_cbpref[0x97] = [op_res_r,        "RES", "2,A"]
-op.map_cbpref[0x90] = [op_res_r,        "RES", "2,B"]
-op.map_cbpref[0x91] = [op_res_r,        "RES", "2,C"]
-op.map_cbpref[0x92] = [op_res_r,        "RES", "2,D"]
-op.map_cbpref[0x93] = [op_res_r,        "RES", "2,E"]
-op.map_cbpref[0x94] = [op_res_r,        "RES", "2,H"]
-op.map_cbpref[0x95] = [op_res_r,        "RES", "2,L"]
-op.map_cbpref[0x96] = [op_res_hlmem,    "RES", "2,(HL)"]
-op.map_cbpref[0x9F] = [op_res_r,        "RES", "3,A"]
-op.map_cbpref[0x98] = [op_res_r,        "RES", "3,B"]
-op.map_cbpref[0x99] = [op_res_r,        "RES", "3,C"]
-op.map_cbpref[0x9A] = [op_res_r,        "RES", "3,D"]
-op.map_cbpref[0x9B] = [op_res_r,        "RES", "3,E"]
-op.map_cbpref[0x9C] = [op_res_r,        "RES", "3,H"]
-op.map_cbpref[0x9D] = [op_res_r,        "RES", "3,L"]
-op.map_cbpref[0x9E] = [op_res_hlmem,    "RES", "3,(HL)"]
-op.map_cbpref[0xA7] = [op_res_r,        "RES", "4,A"]
-op.map_cbpref[0xA0] = [op_res_r,        "RES", "4,B"]
-op.map_cbpref[0xA1] = [op_res_r,        "RES", "4,C"]
-op.map_cbpref[0xA2] = [op_res_r,        "RES", "4,D"]
-op.map_cbpref[0xA3] = [op_res_r,        "RES", "4,E"]
-op.map_cbpref[0xA4] = [op_res_r,        "RES", "4,H"]
-op.map_cbpref[0xA5] = [op_res_r,        "RES", "4,L"]
-op.map_cbpref[0xA6] = [op_res_hlmem,    "RES", "4,(HL)"]
-op.map_cbpref[0xAF] = [op_res_r,        "RES", "5,A"]
-op.map_cbpref[0xA8] = [op_res_r,        "RES", "5,B"]
-op.map_cbpref[0xA9] = [op_res_r,        "RES", "5,C"]
-op.map_cbpref[0xAA] = [op_res_r,        "RES", "5,D"]
-op.map_cbpref[0xAB] = [op_res_r,        "RES", "5,E"]
-op.map_cbpref[0xAC] = [op_res_r,        "RES", "5,H"]
-op.map_cbpref[0xAD] = [op_res_r,        "RES", "5,L"]
-op.map_cbpref[0xAE] = [op_res_hlmem,    "RES", "5,(HL)"]
-op.map_cbpref[0xB7] = [op_res_r,        "RES", "6,A"]
-op.map_cbpref[0xB0] = [op_res_r,        "RES", "6,B"]
-op.map_cbpref[0xB1] = [op_res_r,        "RES", "6,C"]
-op.map_cbpref[0xB2] = [op_res_r,        "RES", "6,D"]
-op.map_cbpref[0xB3] = [op_res_r,        "RES", "6,E"]
-op.map_cbpref[0xB4] = [op_res_r,        "RES", "6,H"]
-op.map_cbpref[0xB5] = [op_res_r,        "RES", "6,L"]
-op.map_cbpref[0xB6] = [op_res_hlmem,    "RES", "6,(HL)"]
-op.map_cbpref[0xBF] = [op_res_r,        "RES", "7,A"]
-op.map_cbpref[0xB8] = [op_res_r,        "RES", "7,B"]
-op.map_cbpref[0xB9] = [op_res_r,        "RES", "7,C"]
-op.map_cbpref[0xBA] = [op_res_r,        "RES", "7,D"]
-op.map_cbpref[0xBB] = [op_res_r,        "RES", "7,E"]
-op.map_cbpref[0xBC] = [op_res_r,        "RES", "7,H"]
-op.map_cbpref[0xBD] = [op_res_r,        "RES", "7,L"]
-op.map_cbpref[0xBE] = [op_res_hlmem,    "RES", "7,(HL)"]
-
-
+for i in range(0, 256):
+    if(op.map_nopref[i] == None):
+        op.map_nopref[i] = no_operation
+    if(op.map_cbpref[i] == None):
+        op.map_cbpref[i] = no_operation
+        
 
 
