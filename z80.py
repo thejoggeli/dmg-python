@@ -51,9 +51,6 @@ class OP:
             
 op = OP()
 
-class Register:
-    value = 0
-
 class RegisterSet:
 
     b = 0
