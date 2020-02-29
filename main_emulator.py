@@ -1,12 +1,15 @@
 import dlog
 import z80
 import mem
+import cartridge as car
 
 z80.init()
 
 quit = False
 steps = 0
 steps_default = 5
+
+car.load_gb_file("roms/Super Mario Land (World).gb")
 
 def print_spacer():
     dlog.print_msg("SYS", "============================================================================================================")
