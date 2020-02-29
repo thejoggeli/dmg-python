@@ -1,5 +1,6 @@
 import z80
 import mem
+import sys
 
 LEVEL_ALL = 20
 LEVEL_WARNING = 10
@@ -15,9 +16,8 @@ def init():
     pass
 
 def print_error(src, msg):
-    if(level < LEVEL_ERROR):
-        return
     print("[ "+src+" ]" + "\tERROR! " + msg)
+    sys.exit()
 
 def print_warning(src, msg):
     if(level < LEVEL_WARNING):
@@ -74,19 +74,23 @@ def print_z80_op():
     msg += info[z80.OPCODE_INFO_NAME] + "\t"
     msg += info[z80.OPCODE_INFO_PARAMS]
     
-    params_offset = 1 if z80.op.prefix == 0x00 else 2    
+    params_offset = 1 if z80.op.prefix == 0x00 else 2
+    global enable_mem_read
+    prev_read = enable_mem_read
+    enable_mem_read = False
     for i in range(params_offset, size):
-        param = mem.read_byte(z80.op.address+i, silent=True)
+        param = mem.read_byte(z80.op.address+i)
         msg += "\t" + "0x{0:0{1}X}".format(param,2)           
-        
+    enable_mem_read = prev_read
     print_msg("Z80", msg)
 
-def print_mem(action, addr, n1, value, n2):
+def print_mem(action, addr, value, name):
     if(level < LEVEL_ALL):
         return
     print_msg(
         "MEM",
         action + "\t" + 
-        "0x{0:0{1}X}".format(addr, n1) + "\t" +
-        "0x{0:0{1}X}".format(value, n2)
+        "0x{0:0{1}X}".format(addr, 4) + "\t" +
+        "0x{0:0{1}X}".format(value, 2) + "\t" +
+        name
     )

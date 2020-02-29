@@ -250,6 +250,10 @@ def execute():
     if(state.interrupt_running):
         dlog.print_error("Z80", "interrupt_running behavior not implemented")
     
+    # end bios
+    if(mem.bios_running and reg.pc > 0xFF):
+        mem.end_bios()
+    
     # print current cpu state
     if(dlog.enable_z80):
         dlog.print_z80_st()
@@ -267,12 +271,12 @@ def execute():
         op.code = 0x00
         op.map = None
     elif(byte == 0xED):
-        dlog.print_error("Z80", "0xDD prefix not implemented")
+        dlog.print_error("Z80", "0xED prefix not implemented")
         op.prefix = 0x00
         op.code = 0x00
         op.map = None    
     elif(byte == 0xFD):
-        dlog.print_error("Z80", "0xDD prefix not implemented")
+        dlog.print_error("Z80", "0xFD prefix not implemented")
         op.prefix = 0x00
         op.code = 0x00
         op.map = None    
@@ -1272,7 +1276,7 @@ def op_xxx():
     op.cycles = 4
     dlog.print_error("Z80", "invalid opcode " + hex(op.code) + " at " +  hex(reg.pc-1))
         
-### OP MAP (UNPREFIXED) ############################################################
+### OP MAP #########################################################################
 op.map_nopref       = [None]*256
 op.map_cbpref       = [None]*256
 no_operation        = [op_xxx,          (1, "XXX", "")]

@@ -1,13 +1,8 @@
 import dlog
 import z80
 import mem
-import code_loader as cld
 
 z80.init()
-
-code = cld.load_binary_file("bios.gb")
-cld.load_into_memory(code)
-#cld.print_code(code)
 
 quit = False
 steps = 0
