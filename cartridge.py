@@ -87,8 +87,8 @@ class MBC1_State:
         dlog.print_msg(
             "CAR", 
             "cartridge" + "\t" +
-            "ROMBank=" + "0x{0:0{1}X}".format(self.rom_bank_selected, 2) + "\t" +
-            "RAMBank=" + "0x{0:0{1}X}".format(self.ram_bank_selected, 2) + "\t" +
+            "ROM=" + "0x{0:0{1}X}".format(self.rom_bank_selected, 2) + "\t" +
+            "RAM=" + "0x{0:0{1}X}".format(self.ram_bank_selected, 2) + "\t" +
             "Mode=" + ("ROM" if self.rom_ram_mode == 0 else "RAM")
         )
 
@@ -166,9 +166,9 @@ def mbc2_rom_x_name():
 def mbc2_ram_read(addr):
     dlog.print_error("CAR", "mbc2_ram_read not implemented")
 def mbc2_ram_write(addr, byte):
-    dlog.print_error("CAR", "mbc1_rom_x_write not implemented")
+    dlog.print_error("CAR", "mbc2_ram_write not implemented")
 def mbc2_ram_name():
-    dlog.print_error("CAR", "mbc1_ram_name not implemented")
+    dlog.print_error("CAR", "mbc2_ram_name not implemented")
 
 def mbc3_rom_0_read(addr):
     dlog.print_error("CAR", "mbc3_rom_0_read not implemented")
@@ -185,9 +185,9 @@ def mbc3_rom_x_name():
 def mbc3_ram_read(addr):
     dlog.print_error("CAR", "mbc3_ram_read not implemented")
 def mbc3_ram_write(addr, byte):
-    dlog.print_error("CAR", "mbc1_rom_x_write not implemented")
+    dlog.print_error("CAR", "mbc3_ram_write not implemented")
 def mbc3_ram_name():
-    dlog.print_error("CAR", "mbc1_ram_name not implemented")
+    dlog.print_error("CAR", "mbc3_ram_name not implemented")
 
 rom_size_map = [32, 64, 128, 256, 512, 1024, 2048, 4196]
 ram_size_map = [0, 2, 8, 32]

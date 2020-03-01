@@ -226,80 +226,120 @@ class State:
     cycles_total = 0
     halted = False
     stopped = False
-    interrupt_enabled = False
-    interrupt_requested = False    
-    interrupt_running = False    
+    interrupt_master_enable = 0
+    interrupt_master_enable_skip_one_cycle = 0
 state = State()
 
 def init():
     pass
     
-def execute():        
+def execute():      
+
     if(state.halted):
         dlog.print_error("Z80", "halted behavior not implemented")
         
     if(state.stopped):
         dlog.print_error("Z80", "stopped behavior not implemented")
-        
-    if(state.interrupt_enabled):
-        dlog.print_error("Z80", "interrupt_enabled behavior not implemented")
-        
-    if(state.interrupt_requested):
-        dlog.print_error("Z80", "interrupt_requested behavior not implemented")
-        
-    if(state.interrupt_running):
-        dlog.print_error("Z80", "interrupt_running behavior not implemented")
-    
+            
     # end bios
     if(mem.bios_running and reg.pc > 0xFF):
         mem.end_bios()
-    
+            
     # print current cpu state
     if(dlog.enable_z80):
         dlog.print_z80_st()
         
+    execute_opcode = True
+        
+    if(state.interrupt_master_enable):
+        if(state.interrupt_master_enable_skip_one_cycle):
+            state.interrupt_master_enable_skip_one_cycle = 0
+        else:
+            # check if interrupt
+            if_flags = mem.mem_zeropage[0x0F]
+            ie_flags = mem.mem_zeropage[0xFF]
+            masked = if_flags&ie_flags
+            if(masked > 0):
+                state.interrupt_master_enable = 0    
+                if(state.halted):
+                    state.cycles_total += 24
+                else:                    
+                    state.cycles_total += 20  
+                # push pc on stack 
+                reg.sp -= 2; mem.write_word(reg.sp, reg.pc)              
+                # jump to vector
+                if(masked&0x01):
+                    mem.mem_zeropage[0x0F] &= 0x1E # reset bit 0
+                    # vertical blank             
+                    if(dlog.enable_z80):
+                        dlog.print_msg("Z80", "interrupt" + "\t" + "vertical blank") 
+                    reg.pc = 0x0040
+                elif(masked&0x02):
+                    mem.mem_zeropage[0x0F] &= 0x1D # reset bit 1
+                    # LCD STAT
+                    if(dlog.enable_z80):
+                        dlog.print_msg("Z80", "interrupt" + "\t" + "LCD STAT")
+                    reg.pc = 0x0048
+                elif(masked&0x04):
+                    mem.mem_zeropage[0x0F] &= 0x1B # reset bit 2
+                    # timer
+                    if(dlog.enable_z80):
+                        dlog.print_msg("Z80", "interrupt" + "\t" + "timer")
+                    reg.pc = 0x0050
+                elif(masked&0x08):
+                    mem.mem_zeropage[0x0F] &= 0x17 # reset bit 3
+                    # timer
+                    if(dlog.enable_z80):
+                        dlog.print_msg("Z80", "interrupt" + "\t" + "serial")
+                    reg.pc = 0x0058
+                else:  
+                    mem.mem_zeropage[0x0F] &= 0x0F # reset bit 4
+                    # joypad
+                    if(dlog.enable_z80):
+                        dlog.print_msg("Z80", "interrupt" + "\t" + "joypad")
+                    reg.pc = 0x0060
+                execute_opcode = False
+                
     # fetch op code
-    op.address = reg.pc
-    byte = mem.read_byte(reg.pc); reg.pc += 1
-    if(byte == 0xCB):
-        op.prefix = 0xCB
-        op.code = mem.read_byte(reg.pc); reg.pc += 1
-        op.map = op.map_cbpref
-    elif(byte == 0xDD):
-        dlog.print_error("Z80", "0xDD prefix not implemented")
-        op.prefix = 0x00
-        op.code = 0x00
-        op.map = None
-    elif(byte == 0xED):
-        dlog.print_error("Z80", "0xED prefix not implemented")
-        op.prefix = 0x00
-        op.code = 0x00
-        op.map = None    
-    elif(byte == 0xFD):
-        dlog.print_error("Z80", "0xFD prefix not implemented")
-        op.prefix = 0x00
-        op.code = 0x00
-        op.map = None    
-    else:
-        op.prefix = 0x00
-        op.code = byte
-        op.map = op.map_nopref
-    
-    # wrap pc
-    if(reg.pc > 0xFFFF):
-        reg.pc &= 0xFFFF
-        dlog.print_error("Z80", "pc wrap in execute (what is actual behavior?)")
-    
-    # print opcode
-    if(dlog.enable_z80):
-        dlog.print_z80_op()
-    
-    # execute opcode
-    op.map[op.code][0]()
+    if(execute_opcode):
+        op.address = reg.pc
+        byte = mem.read_byte(reg.pc); reg.pc += 1
+        if(byte == 0xCB):
+            op.prefix = 0xCB
+            op.code = mem.read_byte(reg.pc); reg.pc += 1
+            op.map = op.map_cbpref
+        elif(byte == 0xDD):
+            dlog.print_error("Z80", "0xDD prefix not implemented")
+            op.prefix = 0x00
+            op.code = 0x00
+            op.map = None
+        elif(byte == 0xED):
+            dlog.print_error("Z80", "0xED prefix not implemented")
+            op.prefix = 0x00
+            op.code = 0x00
+            op.map = None    
+        elif(byte == 0xFD):
+            dlog.print_error("Z80", "0xFD prefix not implemented")
+            op.prefix = 0x00
+            op.code = 0x00
+            op.map = None    
+        else:
+            op.prefix = 0x00
+            op.code = byte
+            op.map = op.map_nopref        
+        # wrap pc
+        if(reg.pc > 0xFFFF):
+            reg.pc &= 0xFFFF
+            dlog.print_error("Z80", "pc wrap in execute (what is actual behavior?)")        
+        # print opcode
+        if(dlog.enable_z80):
+            dlog.print_z80_op()        
+        # execute opcode
+        op.map[op.code][0]()
+        state.cycles_total += op.cycles
     
     # state
     state.step_nr += 1
-    state.cycles_total += op.cycles
     state.time_passed = state.cycles_total * CYCLE_DURATION
     
 def print_instruction_set():
@@ -877,6 +917,14 @@ def op_nop():
     
 ### OP HALT ########################################################################
 def op_halt():
+    # The instruction immediately following the
+    # HALT instruction is "skipped" when interrupts are
+    # disabled (DI) on the GB,GBP, and SGB. As a result,
+    # always put a NOP after the HALT instruction. This
+    # instruction skipping doesn't occur when interrupts
+    # are enabled (EI).
+    # Source: GBCPUman.pdf
+    # TODO implement HALT bug
     state.halted = True
     op.cycles = 4
     
@@ -887,17 +935,18 @@ def op_stop():
     # https://stackoverflow.com/questions/41353869/length-of-instruction-ld-a-c-in-gameboy-z80-processor
     # There is a hardware bug on Gameboy Classic that causes 
     # the instruction following a STOP to be skipped.
-    reg.pc += 1
+    # TODO implement STOP bug
     op.cycles = 4
     
 ### OP DI ##########################################################################
 def op_di():
-    state.interrupt_enabled = False
+    state.interrupt_master_enable = 0
     op.cycles = 4
     
 ### OP EI ##########################################################################
 def op_ei():
-    state.interrupt_enabled = True    
+    state.interrupt_master_enable = 1
+    state.interrupt_master_enable_skip_one_cycle = 1
     op.cycles = 4
     
 ### OP RLC #########################################################################   
@@ -1268,8 +1317,8 @@ def op_reti():
     reg.pc = mem.read_word(reg.sp)
     reg.sp += 2
     op.cycles = 8
-    state.interrupt_enabled = True
-    state.interrupt_running = False
+    state.interrupt_master_enable = 1
+    state.interrupt_master_enable_skip_one_cycle = 0
     
 ### OP XXX #########################################################################
 def op_xxx():

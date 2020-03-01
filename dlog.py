@@ -9,6 +9,7 @@ LEVEL_ERROR = 0
 level = LEVEL_ALL
 silent = False
 enable_z80 = True
+enable_z80_interrupt = True
 enable_mem_read = True
 enable_mem_write = True
 enable_car_state = True
@@ -35,6 +36,16 @@ def print_msg(src, msg):
 def print_z80_st():
     if(level < LEVEL_ALL):
         return
+    if(enable_z80_interrupt):
+        print_msg(
+            "Z80", 
+            "interrupt" + "\t" + 
+            "IME=" + 
+            str(z80.state.interrupt_master_enable) + "/" + 
+            str(z80.state.interrupt_master_enable_skip_one_cycle) + "\t\t" + 
+            "IE=" + "{0:0{1}b}".format(mem.mem_zeropage[0xFF],5) + "\t" +
+            "IF=" + "{0:0{1}b}".format(mem.mem_zeropage[0x0F],5)
+        )
     print_msg(
         "Z80",
         "registers\t"
