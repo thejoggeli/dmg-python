@@ -3,13 +3,16 @@ import z80
 import mem
 import cartridge as car
 
+car.load_gb_file("roms/Super Mario Land (World).gb")
+car.print_info()
+
 z80.init()
+mem.init()
 
 quit = False
 steps = 0
 steps_default = 5
 
-car.load_gb_file("roms/Super Mario Land (World).gb")
 
 def print_spacer():
     dlog.print_msg("SYS", "============================================================================================================")
@@ -20,7 +23,10 @@ while(not quit):
     if(user_input == "q"):
         quit = True
         break
-    if(user_input.endswith("silent")):
+    if(user_input.endswith("silent+")):
+        user_input = user_input.replace("silent+", "")
+        dlog.level = dlog.LEVEL_ERROR
+    elif(user_input.endswith("silent")):
         user_input = user_input.replace("silent", "")
         dlog.level = dlog.LEVEL_WARNING 
     try:
@@ -30,9 +36,12 @@ while(not quit):
         steps = steps_default
     for i in range(0, steps):
         print_spacer()
-        z80.execute()    
+        if(dlog.enable_car_state):
+            car.mbc_state.print_state()
+        z80.execute() 
     dlog.level = dlog.LEVEL_ALL
     print_spacer()
+    car.mbc_state.print_state()
     dlog.print_z80_st()
 print_spacer()
 z80.exit()

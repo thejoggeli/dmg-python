@@ -11,6 +11,9 @@ silent = False
 enable_z80 = True
 enable_mem_read = True
 enable_mem_write = True
+enable_car_state = True
+enable_car_banking = True
+enable_car_ram_enable = True
 
 def init():
     pass

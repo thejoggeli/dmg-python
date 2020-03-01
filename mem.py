@@ -1,9 +1,77 @@
 import dlog
-import code_loader as cld
+import cartridge as car
 
+read_map = [None]*0x10000
+write_map = [None]*0x10000
+name_map = [None]*0x10000
+
+def init():
+    # load bios
+    global bios_mem
+    with open("bios.gb", "rb") as bios_fh:    
+        bios_mem = bytearray(bios_fh.read())
+    # load memory functions
+    for i in range(0x0000, 0x0100):
+        read_map[i]     = bios_read
+        write_map[i]    = bios_write
+        name_map[i]     = bios_name
+    for i in range(0x0100, 0x4000):
+        read_map[i]     = car.rom_0_read
+        write_map[i]    = car.rom_0_write
+        name_map[i]     = car.rom_0_name
+    for i in range(0x4000, 0x8000):
+        read_map[i]     = car.rom_x_read
+        write_map[i]    = car.rom_x_write
+        name_map[i]     = car.rom_x_name
+    for i in range(0x8000, 0xA000):
+        read_map[i]     = videoram_read
+        write_map[i]    = videoram_write
+        name_map[i]     = videorame_name
+    for i in range(0xA000, 0xC000):
+        read_map[i]     = car.ram_read
+        write_map[i]    = car.ram_write
+        name_map[i]     = car.ram_name
+    for i in range(0xC000, 0xE000):
+        read_map[i]     = intram_read
+        write_map[i]    = intram_write
+        name_map[i]     = intram_name
+    for i in range(0xE000, 0xFE00):
+        read_map[i]     = intramecho_read
+        write_map[i]    = intramecho_write
+        name_map[i]     = intramecho_name
+    for i in range(0xFE00, 0xFEA0):
+        read_map[i]     = spritemem_read
+        write_map[i]    = spritemem_write
+        name_map[i]     = spritemem_name
+    for i in range(0xFEA0, 0xFF00):
+        read_map[i]     = empty_read
+        write_map[i]    = empty_wirte
+        name_map[i]     = empty_name
+    for i in range(0xFF00, 0xFF4C):
+        read_map[i]     = io_read
+        write_map[i]    = io_write
+        name_map[i]     = io_name
+    for i in range(0xFF4C, 0xFF80):
+        read_map[i]     = empty_read
+        write_map[i]    = empty_wirte
+        name_map[i]     = empty_name
+    for i in range(0xFF80, 0xFFFF):
+        read_map[i]     = zeropage_read
+        write_map[i]    = zeropage_write
+        name_map[i]     = zeropage_name
+        
+bios_running = True
+def end_bios():
+    global bios_running, read_map, write_map
+    bios_running = False
+    dlog.print_message("MEM", "end of bios")
+    for i in range(0, 0x100):
+        read_map[i] = car.rom_0_read
+        write_map[i] = car.rom_0_write
+        name_map[i] = car.rom_0_name
 
 # bios
-bios_mem = cld.load_binary_file("bios.gb")
+bios_mem = None
 def bios_read(addr):
     return bios_mem[addr]
 def bios_write(addr, byte):
@@ -11,30 +79,6 @@ def bios_write(addr, byte):
     pass
 def bios_name():
     return "BIOS"
-    
-# cartridge rom
-def rom1_read(addr):
-    # addr-0x0000
-    dlog.print_error("MEM", "cartridge_rom1_read not implemented")
-    pass
-def rom1_write(addr, byte):
-    # addr-0x0000
-    dlog.print_error("MEM", "can't write to cartridge rom")
-    pass
-def rom1_name():
-    return "ROM #0"
-    
-# cartridge switchable rom
-def rom2_read(addr):
-    # addr-0x4000
-    dlog.print_error("MEM", "cartridge_rom2_read not implemented")
-    pass
-def rom2_write(addr, byte):
-    # addr-0x4000
-    dlog.print_error("MEM", "can't write to cartridge rom")
-    pass
-def rom2_name():
-    return "ROM (switchable)"
     
 # video ram
 videoram_mem = [0]*0x2000
@@ -44,18 +88,6 @@ def videoram_write(addr, byte):
     videoram_mem[addr-0x8000] = byte
 def videorame_name():
     return "Video RAM"
-    
-# switchable ram
-def switchram_read(addr):
-    # addr-0xA000
-    dlog.print_error("MEM", "switchram_read not implemented")
-    pass
-def switchram_write(addr, byte):
-    # addr-0xA000
-    dlog.print_error("MEM", "switchram_write not implemented")
-    pass
-def switchram_name():
-    return "RAM (switchable)"
     
 # internal ram
 intram_mem = [0]*0x2000
@@ -115,69 +147,6 @@ def zeropage_write(addr, byte):
     mem_zeropage[addr-0xFF80] = byte
 def zeropage_name():
     return "RAM (zero page)"
-
-read_map = [None]*0x10000
-write_map = [None]*0x10000
-name_map = [None]*0x10000
-
-
-for i in range(0x0000, 0x0100):
-    read_map[i]     = bios_read
-    write_map[i]    = bios_write
-    name_map[i]     = bios_name
-for i in range(0x0100, 0x4000):
-    read_map[i]     = rom1_read
-    write_map[i]    = rom1_write
-    name_map[i]     = rom1_name
-for i in range(0x4000, 0x8000):
-    read_map[i]     = rom2_read
-    write_map[i]    = rom2_write
-    name_map[i]     = rom2_name
-for i in range(0x8000, 0xA000):
-    read_map[i]     = videoram_read
-    write_map[i]    = videoram_write
-    name_map[i]     = videorame_name
-for i in range(0xA000, 0xC000):
-    read_map[i]     = switchram_read
-    write_map[i]    = switchram_write
-    name_map[i]     = switchram_name
-for i in range(0xC000, 0xE000):
-    read_map[i]     = intram_read
-    write_map[i]    = intram_write
-    name_map[i]     = intram_name
-for i in range(0xE000, 0xFE00):
-    read_map[i]     = intramecho_read
-    write_map[i]    = intramecho_write
-    name_map[i]     = intramecho_name
-for i in range(0xFE00, 0xFEA0):
-    read_map[i]     = spritemem_read
-    write_map[i]    = spritemem_write
-    name_map[i]     = spritemem_name
-for i in range(0xFEA0, 0xFF00):
-    read_map[i]     = empty_read
-    write_map[i]    = empty_wirte
-    name_map[i]     = empty_name
-for i in range(0xFF00, 0xFF4C):
-    read_map[i]     = io_read
-    write_map[i]    = io_write
-    name_map[i]     = io_name
-for i in range(0xFF4C, 0xFF80):
-    read_map[i]     = empty_read
-    write_map[i]    = empty_wirte
-    name_map[i]     = empty_name
-for i in range(0xFF80, 0xFFFF):
-    read_map[i]     = zeropage_read
-    write_map[i]    = zeropage_write
-    name_map[i]     = zeropage_name
-    
-bios_running = True
-def end_bios():
-    global bios_running, read_map, write_map
-    bios_running = False
-    dlog.print_message("MEM", "end of bios")
-    for i in range(0, 0x100):
-        read_map[i] = rom1_read
-        write_map[i] = rom1_write
 
 def read_byte(addr):
     if(dlog.enable_mem_read):
