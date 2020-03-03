@@ -223,6 +223,7 @@ reg = RegisterSet()
 class State:
     time_passed = 0
     step_nr = 0
+    cycles_delta = 0
     cycles_total = 0
     halted = False
     stopped = False
@@ -233,7 +234,7 @@ state = State()
 def init():
     pass
     
-def execute():      
+def update():      
 
     if(state.halted):
         dlog.print_error("Z80", "halted behavior not implemented")
@@ -246,8 +247,8 @@ def execute():
         mem.end_bios()
             
     # print current cpu state
-    if(dlog.enable_z80):
-        dlog.print_z80_st()
+    if(dlog.enable.z80):
+        print_state()
         
     execute_opcode = True
         
@@ -261,44 +262,47 @@ def execute():
             masked = if_flags&ie_flags
             if(masked > 0):
                 state.interrupt_master_enable = 0    
+                interrupt_cycles = 0
                 if(state.halted):
-                    state.cycles_total += 24
+                    interrupt_cycles = 24
                 else:                    
-                    state.cycles_total += 20  
+                    interrupt_cycles = 20  
                 # push pc on stack 
                 reg.sp -= 2; mem.write_word(reg.sp, reg.pc)              
                 # jump to vector
                 if(masked&0x01):
-                    mem.mem_zeropage[0x0F] &= 0x1E # reset bit 0
                     # vertical blank             
-                    if(dlog.enable_z80):
+                    mem.mem_zeropage[0x0F] &= 0x1E # reset bit 0
+                    if(dlog.enable.z80):
                         dlog.print_msg("Z80", "interrupt" + "\t" + "vertical blank") 
                     reg.pc = 0x0040
                 elif(masked&0x02):
-                    mem.mem_zeropage[0x0F] &= 0x1D # reset bit 1
                     # LCD STAT
-                    if(dlog.enable_z80):
+                    mem.mem_zeropage[0x0F] &= 0x1D # reset bit 1
+                    if(dlog.enable.z80):
                         dlog.print_msg("Z80", "interrupt" + "\t" + "LCD STAT")
                     reg.pc = 0x0048
                 elif(masked&0x04):
-                    mem.mem_zeropage[0x0F] &= 0x1B # reset bit 2
                     # timer
-                    if(dlog.enable_z80):
+                    mem.mem_zeropage[0x0F] &= 0x1B # reset bit 2
+                    if(dlog.enable.z80):
                         dlog.print_msg("Z80", "interrupt" + "\t" + "timer")
                     reg.pc = 0x0050
                 elif(masked&0x08):
-                    mem.mem_zeropage[0x0F] &= 0x17 # reset bit 3
                     # timer
-                    if(dlog.enable_z80):
+                    mem.mem_zeropage[0x0F] &= 0x17 # reset bit 3
+                    if(dlog.enable.z80):
                         dlog.print_msg("Z80", "interrupt" + "\t" + "serial")
                     reg.pc = 0x0058
                 else:  
-                    mem.mem_zeropage[0x0F] &= 0x0F # reset bit 4
                     # joypad
-                    if(dlog.enable_z80):
+                    mem.mem_zeropage[0x0F] &= 0x0F # reset bit 4
+                    if(dlog.enable.z80):
                         dlog.print_msg("Z80", "interrupt" + "\t" + "joypad")
                     reg.pc = 0x0060
                 execute_opcode = False
+                state.cycles_delta = interrupt_cycles
+                state.cycles_total += interrupt_cycles
                 
     # fetch op code
     if(execute_opcode):
@@ -332,15 +336,66 @@ def execute():
             reg.pc &= 0xFFFF
             dlog.print_error("Z80", "pc wrap in execute (what is actual behavior?)")        
         # print opcode
-        if(dlog.enable_z80):
-            dlog.print_z80_op()        
+        if(dlog.enable.z80):
+            print_op()        
         # execute opcode
         op.map[op.code][0]()
+        state.cycles_delta = op.cycles
         state.cycles_total += op.cycles
     
     # state
     state.step_nr += 1
     state.time_passed = state.cycles_total * CYCLE_DURATION
+    
+def print_state():
+    dlog.print_msg(
+        "Z80", 
+        "interrupt" + "\t" + 
+        "IME=" + 
+        str(state.interrupt_master_enable) + "/" + 
+        str(state.interrupt_master_enable_skip_one_cycle) + "\t\t" + 
+        "IE=" + "{0:0{1}b}".format(mem.mem_zeropage[0xFF],5) + "\t" +
+        "IF=" + "{0:0{1}b}".format(mem.mem_zeropage[0x0F],5)
+    )
+    dlog.print_msg(
+        "Z80",
+        "registers\t"
+        "PC=" + "0x{0:0{1}X}".format(reg.pc, 4) + "\t" +
+        "B="  + "0x{0:0{1}X}".format(reg.b, 2) + "\t" +
+        "D="  + "0x{0:0{1}X}".format(reg.d, 2) + "\t" +
+        "H="  + "0x{0:0{1}X}".format(reg.h, 2) + "\t" +
+        "A="  + "0x{0:0{1}X}".format(reg.a, 2) + "\t" +
+        "Z N H C" +
+        "Step".rjust(13, " ") +
+        "Cycles".rjust(13, " ") +
+        "Time".rjust(10, " ")
+    )
+    dlog.print_msg(
+        "Z80",
+        "registers\t" +
+        "SP=" + "0x{0:0{1}X}".format(reg.sp, 4) + "\t" +
+        "C="  + "0x{0:0{1}X}".format(reg.c, 2) + "\t" +
+        "E="  + "0x{0:0{1}X}".format(reg.e, 2) + "\t" +
+        "L="  + "0x{0:0{1}X}".format(reg.l, 2) + "\t" +
+        "F="  + "0x{0:0{1}X}".format(reg.f, 2) + "\t" +
+        str(reg.get_flag_z()) + " " +
+        str(reg.get_flag_n()) + " " +
+        str(reg.get_flag_h()) + " " +
+        str(reg.get_flag_c()) +
+        str(state.step_nr).rjust(13, " ") +
+        str(state.cycles_total).rjust(13, " ") +
+        "{0:.2f}".format(round(state.time_passed, 2),2).rjust(10, " ")
+    )
+    
+def print_op():    
+    info = op.get_opcode_info(op.prefix, op.code)
+    size = info[OPCODE_INFO_SIZE]
+    msg = ""
+    msg += "op_decode\t"
+    msg += "0x{0:0{1}X}".format(op.prefix, 2) + "{0:0{1}X}".format(op.code, 2) + "\t"
+    msg += info[OPCODE_INFO_NAME] + "\t"
+    msg += info[OPCODE_INFO_PARAMS]
+    dlog.print_msg("Z80", msg)
     
 def print_instruction_set():
     
@@ -375,9 +430,7 @@ def print_instruction_set():
         print(msg)
     
 def exit():
-    # print current cpu state
-    if(dlog.enable_z80):
-        dlog.print_z80_st()
+    pass
 
 ### OP LD (8-bit)###################################################################
 def op_ld_r1_n():

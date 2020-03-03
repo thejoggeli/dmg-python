@@ -131,10 +131,12 @@ def empty_name():
 # I/O ports
 io_mem = [0]*0x4C
 def io_read(addr):
-    dlog.print_warning("MEM", "io_read not complete")
+    if(dlog.enable.mem_warnings):
+        dlog.print_warning("MEM", "io_read not complete")
     return io_mem[addr-0xFF00]
 def io_write(addr, byte):
-    dlog.print_warning("MEM", "io_write not complete")
+    if(dlog.enable.mem_warnings):
+        dlog.print_warning("MEM", "io_write not complete")
     io_mem[addr-0xFF00] = byte
 def io_name():
     return "I/O ports"
@@ -149,15 +151,27 @@ def zeropage_name():
     return "RAM (zero page)"
 
 def read_byte(addr):
-    if(dlog.enable_mem_read):
-        byte = read_map[addr](addr)
-        dlog.print_mem("read_byte", addr, byte, name_map[addr]())
+    if(dlog.enable.mem_read):
+        byte = read_map[addr](addr)        
+        dlog.print_msg(
+            "MEM",
+            "read_byte" + "\t" + 
+            "0x{0:0{1}X}".format(addr, 4) + "\t" +
+            "0x{0:0{1}X}".format(byte, 2) + "\t" +
+            name_map[addr]()
+        )
         return byte
     return read_map[addr](addr)
 
 def write_byte(addr, byte):
-    if(dlog.enable_mem_write):
-        dlog.print_mem("write_byte ", addr, byte, name_map[addr]())
+    if(dlog.enable.mem_write):        
+        dlog.print_msg(
+            "MEM",
+            "write_byte" + "\t" + 
+            "0x{0:0{1}X}".format(addr, 4) + "\t" +
+            "0x{0:0{1}X}".format(byte, 2) + "\t" +
+            name_map[addr]()
+        )
     write_map[addr](addr, byte)
     
 def read_word(addr):

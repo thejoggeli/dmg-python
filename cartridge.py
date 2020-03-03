@@ -77,6 +77,13 @@ def print_info():
     dlog.print_msg("CAR", "ROM size\t"+str(info.rom_size)+"K" + "\t" + str(len(mbc_state.rom_banks)) + " banks")
     dlog.print_msg("CAR", "RAM size\t"+str(info.ram_size)+"K" + "\t" + str(len(mbc_state.ram_banks)) + " banks")
 
+def print_state():
+    mbc_state.print_state()
+
+def update():
+    if(dlog.enable.car_state):
+        mbc_state.print_state()
+
 class MBC1_State:
     rom_banks = []
     rom_bank_selected = 0
@@ -98,11 +105,11 @@ def mbc1_rom_0_write(addr, byte):
     if(addr >= 0 and addr <= 0x1FFF):
         # RAM enable/disable
         if(byte&0x0A):
-            if(dlog.enable_car_ram_enable):
+            if(dlog.enable.car_ram_enable):
                 dlog.print_msg("CAR", "RAM Enable")
             # nothing else to do?
         else: 
-            if(dlog.enable_car_ram_enable):
+            if(dlog.enable.car_ram_enable):
                 dlog.print_msg("CAR", "RAM Disable")
             # nothing else to do?
     elif(addr >= 0x2000 and addr <= 0x3FFF):
@@ -111,7 +118,7 @@ def mbc1_rom_0_write(addr, byte):
         if(x == 0x00):
             x |= 0x01
         mbc_state.rom_bank_selected = (mbc_state.rom_bank_selected&0x60)|x
-        if(dlog.enable_car_banking):
+        if(dlog.enable.car_banking):
             dlog.print_msg("CAR", "select_rom_0_4" + "\t" + "Bank " + "0x{0:0{1}X}".format(mbc_state.selected_bank, 2))
 def mbc1_rom_0_name():
     return "ROM Bank 0x00"
@@ -124,12 +131,12 @@ def mbc1_rom_x_write(addr, byte):
             # ROM bank select bits 5-6
             mbc_state.rom_bank_selected = (x<<5)|(mbc_state.rom_bank_selected&0x1F)
             x = (byte>>5)&0x03
-            if(dlog.enable_car_banking):
+            if(dlog.enable.car_banking):
                 dlog.print_msg("CAR", "select_rom_5_6" + "\t" + "Bank " + "0x{0:0{1}X}".format(mbc_state.ram_bank_selected, 2))
         else:
             # RAM bank select
             mbc_state.ram_bank_selected = x
-            if(dlog.enable_car_banking):
+            if(dlog.enable.car_banking):
                 dlog.print_msg("CAR", "select_ram" + "\t" + "Bank " + "0x{0:0{1}X}".format(mbc_state.ram_bank_selected, 2))
     elif(addr >= 0x6000 and addr <= 0x7FFF):        
         # ROM/RAM Mode Select
@@ -140,7 +147,7 @@ def mbc1_rom_x_write(addr, byte):
         else:   
             # only ROM Banks 0x00-0x1F can be used during Mode 1
             mbc_state.rom_bank_selected = mbc_state.rom_bank_selected&0x1F
-        if(dlog.enable_car_banking):
+        if(dlog.enable.car_banking):
             dlog.print_msg("CAR", "select_mode\t" + "ROM/RAM mode set to " + str(mbc_state.rom_ram_mode))
 def mbc1_rom_x_name():
     return "ROM Bank " + "0x{0:0{1}X}".format(mbc_state.rom_bank_selected, 2)
