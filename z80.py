@@ -221,6 +221,7 @@ class RegisterSet:
 reg = RegisterSet()
 
 class State:
+    instruction_location = 0
     time_passed = 0
     step_nr = 0
     cycles_delta = 0
@@ -249,6 +250,8 @@ def update():
     # print current cpu state
     if(dlog.enable.z80):
         print_state()
+    
+    state.instruction_location = reg.pc
         
     execute_opcode = True
         
