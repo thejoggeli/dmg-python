@@ -223,9 +223,7 @@ reg = RegisterSet()
 class State:
     instruction_location = 0
     time_passed = 0
-    step_nr = 0
     cycles_delta = 0
-    cycles_total = 0
     halted = False
     stopped = False
     interrupt_master_enable = 0
@@ -242,11 +240,7 @@ def update():
         
     if(state.stopped):
         dlog.print_error("Z80", "stopped behavior not implemented")
-            
-    # end bios
-    if(mem.bios_running and reg.pc > 0xFF):
-        mem.end_bios()
-            
+    
     # print current cpu state
     if(dlog.enable.z80):
         print_state()
@@ -260,8 +254,8 @@ def update():
             state.interrupt_master_enable_skip_one_cycle = 0
         else:
             # check if interrupt
-            if_flags = mem.mem_zeropage[0x0F]
-            ie_flags = mem.mem_zeropage[0xFF]
+            if_flags = mem.read_byte(0xFF0F)
+            ie_flags = mem.read_byte(0xFFFF)
             masked = if_flags&ie_flags
             if(masked > 0):
                 state.interrupt_master_enable = 0    
@@ -275,37 +269,37 @@ def update():
                 # jump to vector
                 if(masked&0x01):
                     # vertical blank             
-                    mem.mem_zeropage[0x0F] &= 0x1E # reset bit 0
+                    mem.write_byte(0xFF0F, if_flags&0x1E) # reset bit 0
                     if(dlog.enable.z80):
                         dlog.print_msg("Z80", "interrupt" + "\t" + "vertical blank") 
                     reg.pc = 0x0040
                 elif(masked&0x02):
                     # LCD STAT
-                    mem.mem_zeropage[0x0F] &= 0x1D # reset bit 1
+                    mem.write_byte(0xFF0F, if_flags&0x1D) # reset bit 1
                     if(dlog.enable.z80):
                         dlog.print_msg("Z80", "interrupt" + "\t" + "LCD STAT")
                     reg.pc = 0x0048
                 elif(masked&0x04):
                     # timer
-                    mem.mem_zeropage[0x0F] &= 0x1B # reset bit 2
+                    mem.write_byte(0xFF0F, if_flags&0x1B) # reset bit 2
                     if(dlog.enable.z80):
                         dlog.print_msg("Z80", "interrupt" + "\t" + "timer")
                     reg.pc = 0x0050
                 elif(masked&0x08):
                     # timer
-                    mem.mem_zeropage[0x0F] &= 0x17 # reset bit 3
+                    mem.write_byte(0xFF0F, if_flags&0x17) # reset bit 3
                     if(dlog.enable.z80):
                         dlog.print_msg("Z80", "interrupt" + "\t" + "serial")
                     reg.pc = 0x0058
                 else:  
                     # joypad
-                    mem.mem_zeropage[0x0F] &= 0x0F # reset bit 4
+                    mem.write_byte(0xFF0F, if_flags&0x0F) # reset bit 4
                     if(dlog.enable.z80):
                         dlog.print_msg("Z80", "interrupt" + "\t" + "joypad")
                     reg.pc = 0x0060
                 execute_opcode = False
                 state.cycles_delta = interrupt_cycles
-                state.cycles_total += interrupt_cycles
+               #state.cycles_total += interrupt_cycles
                 
     # fetch op code
     if(execute_opcode):
@@ -344,11 +338,13 @@ def update():
         # execute opcode
         op.map[op.code][0]()
         state.cycles_delta = op.cycles
-        state.cycles_total += op.cycles
+       #state.cycles_total += op.cycles
+        
+    if(dlog.enable.z80):
+        print_endst()
     
     # state
-    state.step_nr += 1
-    state.time_passed = state.cycles_total * CYCLE_DURATION
+    state.time_passed += state.cycles_delta * CYCLE_DURATION
     
 def print_state():
     dlog.print_msg(
@@ -357,8 +353,8 @@ def print_state():
         "IME=" + 
         str(state.interrupt_master_enable) + "/" + 
         str(state.interrupt_master_enable_skip_one_cycle) + "\t\t" + 
-        "IE=" + "{0:0{1}b}".format(mem.mem_zeropage[0xFF],5) + "\t" +
-        "IF=" + "{0:0{1}b}".format(mem.mem_zeropage[0x0F],5)
+        "IE=" + "{0:0{1}b}".format(mem.read_byte_silent(0xFFFF),5) + "\t" +
+        "IF=" + "{0:0{1}b}".format(mem.read_byte_silent(0xFF0F),5)
     )
     dlog.print_msg(
         "Z80",
@@ -368,10 +364,8 @@ def print_state():
         "D="  + "0x{0:0{1}X}".format(reg.d, 2) + "\t" +
         "H="  + "0x{0:0{1}X}".format(reg.h, 2) + "\t" +
         "A="  + "0x{0:0{1}X}".format(reg.a, 2) + "\t" +
-        "Z N H C" +
-        "Step".rjust(13, " ") +
-        "Cycles".rjust(13, " ") +
-        "Time".rjust(10, " ")
+        "Z N H C" + "\t"
+        "Time".rjust(12, " ")
     )
     dlog.print_msg(
         "Z80",
@@ -384,19 +378,26 @@ def print_state():
         str(reg.get_flag_z()) + " " +
         str(reg.get_flag_n()) + " " +
         str(reg.get_flag_h()) + " " +
-        str(reg.get_flag_c()) +
-        str(state.step_nr).rjust(13, " ") +
-        str(state.cycles_total).rjust(13, " ") +
-        "{0:.2f}".format(round(state.time_passed, 2),2).rjust(10, " ")
+        str(reg.get_flag_c()) + "\t" + 
+        "{0:.3f}".format(round(state.time_passed, 3),3).rjust(12, " ")
+    )
+    
+def print_endst():
+    dlog.print_msg(
+        "Z80",
+        "z80_endst" + "\t" +        
+        "Cycles="+str(state.cycles_delta)
     )
     
 def print_op():    
     info = op.get_opcode_info(op.prefix, op.code)
     size = info[OPCODE_INFO_SIZE]
     msg = ""
-    msg += "op_decode\t"
-    msg += "0x{0:0{1}X}".format(op.prefix, 2) + "{0:0{1}X}".format(op.code, 2) + "\t"
-    msg += info[OPCODE_INFO_NAME] + "\t"
+    msg += "op_decode ----> "
+   #msg += "0x{0:0{1}X}".format(op.prefix, 2) + "{0:0{1}X}".format(op.code, 2) + "\t"
+    if(op.prefix):
+        msg += "{0:0{1}X}".format(op.prefix, 2) + " "
+    msg += info[OPCODE_INFO_NAME] + " "
     msg += info[OPCODE_INFO_PARAMS]
     dlog.print_msg("Z80", msg)
     
@@ -589,13 +590,14 @@ def op_add_a_x_helper(s2):
     s1 = reg.a
     result = s1+s2
     reg.reset_flags()
-    if(result == 0):
-        reg.set_flag_z()
     if(result > 0xFF):
         reg.set_flag_c()
+    result &= 0xFF
+    if(result == 0):
+        reg.set_flag_z()
     if((s1&0xf)+(s2&0xf) > 0xF):
         reg.set_flag_h()
-    reg.a = result&0xFF
+    reg.a = result
     
 ### OP ADC (8-bit) #################################################################
 def op_adc_a_r2():
@@ -615,14 +617,15 @@ def op_adc_a_x_helper(s2):
     sC = reg.get_flag_c()
     result = s1+s2+sC
     reg.reset_flags()
-    if(result == 0):
-        reg.set_flag_z()
     if(result > 0xFF):
         reg.set_flag_c()
+    result &= 0xFF
+    if(result == 0):
+        reg.set_flag_z()
     if((s1&0xf)+(s2&0xf)+sC > 0xF):
         # TODO half carry might be wrong
         reg.set_flag_h()
-    reg.a = result&0xFF
+    reg.a = result
     
 ### OP SUB (8-bit) #################################################################
 def op_sub_a_r2():
@@ -642,15 +645,16 @@ def op_sub_a_x_helper(s2):
     result = s1-s2
     reg.reset_flags()
     reg.set_flag_n()
-    if(result == 0):
-        reg.set_flag_z()
     if(result < 0):
         # TODO carry might be wrong
         reg.set_flag_c()
+    result &= 0xFF
+    if(result == 0):
+        reg.set_flag_z()
     if((s1&0xf)-(s2&0xf) < 0):
         # TODO half carry might be wrong
         reg.set_flag_h()
-    reg.a = result&0xFF
+    reg.a = result
     
 ### OP SBC (8-bit) #################################################################
 def op_sbc_a_r2():
@@ -671,14 +675,15 @@ def op_sbc_a_x_helper(s2):
     result = s1-s2-sC
     reg.reset_flags()
     reg.set_flag_n()
-    if(result == 0):
-        reg.set_flag_z()
     if(result < 0):
         reg.set_flag_c()
+    result &= 0xFF
+    if(result == 0):
+        reg.set_flag_z()
     if((s1&0xf)-(s2&0xf)-sC < 0):
         # TODO half carry might be wrong
         reg.set_flag_h()
-    reg.a = result&0xFF
+    reg.a = result
     
 ### OP AND (8-bit) #################################################################
 def op_and_a_r2():
@@ -838,6 +843,7 @@ def op_add_hl_rp():
         reg.reset_flag_c()
     if((s1&0xFFF)+(s2&0xFFF) > 0xFFF):
         # TODO half carry might be wrong
+        # 0xFFF? really?
         reg.set_flag_h()
     else:
         # TODO half carry might be wrong
@@ -1594,6 +1600,7 @@ op.map_nopref[0x00] = [op_nop,          (1, "NOP", "")]
 op.map_nopref[0x76] = [op_halt,         (1, "HALT", "")]
 op.map_nopref[0x10] = [op_stop,         (2, "STOP", "")]
 op.map_nopref[0xF3] = [op_di,           (1, "DI", "")]
+op.map_nopref[0xFB] = [op_ei,           (1, "EI", "")]
 op.map_nopref[0x07] = [op_rlc_a,        (1, "RLCA", "")]
 op.map_nopref[0x17] = [op_rl_a,         (1, "RLA", "")]
 op.map_nopref[0x0F] = [op_rrc_a,        (1, "RRCA", "")]

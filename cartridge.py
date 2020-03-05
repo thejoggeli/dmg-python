@@ -57,17 +57,17 @@ def load_gb_file(file):
     ram_name    = mbc1_ram_name
     mbc_state   = MBC1_State()
     
-    num_rom_banks = int(info.rom_size/16)
-    num_ram_banks = int(info.ram_size/8)
-    
-    mbc_state.rom_banks = [None]*num_rom_banks
-    for i in range(0, num_rom_banks):
+    mbc_state.num_rom_banks = int(info.rom_size/16)
+    mbc_state.num_ram_banks = int(info.ram_size/8)
+        
+    mbc_state.rom_banks = [None]*mbc_state.num_rom_banks
+    for i in range(0, mbc_state.num_rom_banks):
         start = i*0x4000
         end = (i+1)*0x4000
         mbc_state.rom_banks[i] = rom_file.bytes[start:end]
     
-    mbc_state.ram_banks = [None]*num_ram_banks
-    for i in range(0, num_ram_banks):
+    mbc_state.ram_banks = [None]*mbc_state.num_ram_banks
+    for i in range(0, mbc_state.num_ram_banks):
         mbc_state.ram_banks[i] = [0]*0x2000
         
 def init():
@@ -104,9 +104,11 @@ def update():
 
 class MBC1_State:
     rom_banks = []
-    rom_bank_selected = 0
     ram_banks = []
+    rom_bank_selected = 1
     ram_bank_selected = 0
+    num_rom_banks = 0
+    num_ram_banks = 0
     rom_ram_mode = 0
     def print_state(self):
         dlog.print_msg(
@@ -124,11 +126,11 @@ def mbc1_rom_0_write(addr, byte):
         # RAM enable/disable
         if(byte&0x0A):
             if(dlog.enable.car_ram_enable):
-                dlog.print_msg("CAR", "RAM Enable")
+                dlog.print_msg("CAR", "write_mbc1\tRAM Enable")
             # nothing else to do?
         else: 
             if(dlog.enable.car_ram_enable):
-                dlog.print_msg("CAR", "RAM Disable")
+                dlog.print_msg("CAR", "write_mbc1\tRAM Disable")
             # nothing else to do?
     elif(addr >= 0x2000 and addr <= 0x3FFF):
         # ROM bank select bits 0-4
@@ -137,8 +139,8 @@ def mbc1_rom_0_write(addr, byte):
             x |= 0x01
         mbc_state.rom_bank_selected = (mbc_state.rom_bank_selected&0x60)|x
         if(dlog.enable.car_banking):
-            dlog.print_msg("CAR", "select_rom_0_4" + "\t" + "Bank " + "0x{0:0{1}X}".format(mbc_state.selected_bank, 2))
-def mbc1_rom_0_name(addr):
+            dlog.print_msg("CAR", "write_mbc1" + "\t" + "Select ROM Bank " + "0x{0:0{1}X}".format(mbc_state.rom_bank_selected, 2))
+def mbc1_rom_0_name():
     return "ROM Bank 0x00"
 def mbc1_rom_x_read(addr):
     return mbc_state.rom_banks[mbc_state.rom_bank_selected][addr-0x4000]
@@ -150,12 +152,12 @@ def mbc1_rom_x_write(addr, byte):
             mbc_state.rom_bank_selected = (x<<5)|(mbc_state.rom_bank_selected&0x1F)
             x = (byte>>5)&0x03
             if(dlog.enable.car_banking):
-                dlog.print_msg("CAR", "select_rom_5_6" + "\t" + "Bank " + "0x{0:0{1}X}".format(mbc_state.ram_bank_selected, 2))
+                dlog.print_msg("CAR", "write_mbc1" + "\t" + "Select ROM Bank " + "0x{0:0{1}X}".format(mbc_state.rom_bank_selected, 2))
         else:
             # RAM bank select
             mbc_state.ram_bank_selected = x
             if(dlog.enable.car_banking):
-                dlog.print_msg("CAR", "select_ram" + "\t" + "Bank " + "0x{0:0{1}X}".format(mbc_state.ram_bank_selected, 2))
+                dlog.print_msg("CAR", "write_mbc1" + "\t" + "Select RAM Bank " + "0x{0:0{1}X}".format(mbc_state.ram_bank_selected, 2))
     elif(addr >= 0x6000 and addr <= 0x7FFF):        
         # ROM/RAM Mode Select
         mbc_state.rom_ram_mode = byte&0x01
@@ -166,52 +168,58 @@ def mbc1_rom_x_write(addr, byte):
             # only ROM Banks 0x00-0x1F can be used during Mode 1
             mbc_state.rom_bank_selected = mbc_state.rom_bank_selected&0x1F
         if(dlog.enable.car_banking):
-            dlog.print_msg("CAR", "select_mode\t" + "ROM/RAM mode set to " + str(mbc_state.rom_ram_mode))
-def mbc1_rom_x_name(addr):
+            dlog.print_msg("CAR", "write_mbc1\t" + "ROM/RAM mode set to " + str(mbc_state.rom_ram_mode))
+def mbc1_rom_x_name():
     return "ROM Bank " + "0x{0:0{1}X}".format(mbc_state.rom_bank_selected, 2)
 def mbc1_ram_read(addr):
     return mbc_state.ram_banks[mbc_state.ram_bank_selected][addr-0xA000]
 def mbc1_ram_write(addr, byte):
+    if(mbc_state.ram_bank_selected >= mbc_state.num_ram_banks):
+       # don't write anything if invalid RAM bank selected
+       # super mario land 1 seems to be writing to external RAM 
+       # even though it doesn't have any
+       # NOT SURE IF THIS BEHAVIOR IS CORRECT
+       return 
     mbc_state.ram_banks[mbc_state.ram_bank_selected][addr-0xA000] = byte
-def mbc1_ram_name(addr):   
+def mbc1_ram_name():   
     return "RAM Bank " + "0x{0:0{1}X}".format(mbc_state.ram_bank_selected, 2)
 
 def mbc2_rom_0_read(addr):
     dlog.print_error("CAR", "mbc2_rom_0_read not implemented")
 def mbc2_rom_0_write(addr, byte):
     dlog.print_error("CAR", "mbc2_rom_0_write() can't write to ROM")
-def mbc2_rom_0_name(addr):
+def mbc2_rom_0_name():
     dlog.print_error("CAR", "mbc2_rom_0_name not implemented")
 def mbc2_rom_x_read(addr):
     dlog.print_error("CAR", "mbc2_rom_x_read not implemented")
 def mbc2_rom_x_write(addr, byte):
     dlog.print_error("CAR", "mbc2_rom_x_write() can't write to ROM")
-def mbc2_rom_x_name(addr):
+def mbc2_rom_x_name():
     dlog.print_error("CAR", "mbc2_rom_x_name not implemented")
 def mbc2_ram_read(addr):
     dlog.print_error("CAR", "mbc2_ram_read not implemented")
 def mbc2_ram_write(addr, byte):
     dlog.print_error("CAR", "mbc2_ram_write not implemented")
-def mbc2_ram_name(addr):
+def mbc2_ram_name():
     dlog.print_error("CAR", "mbc2_ram_name not implemented")
 
 def mbc3_rom_0_read(addr):
     dlog.print_error("CAR", "mbc3_rom_0_read not implemented")
 def mbc3_rom_0_write(addr, byte):
     dlog.print_error("CAR", "mbc3_rom_0_write() can't write to ROM")
-def mbc3_rom_0_name(addr):
+def mbc3_rom_0_name():
     dlog.print_error("CAR", "mbc3_rom_0_name not implemented")
 def mbc3_rom_x_read(addr):
     dlog.print_error("CAR", "mbc3_rom_x_read not implemented")
 def mbc3_rom_x_write(addr, byte):
     dlog.print_error("CAR", "mbc3_rom_x_write() can't write to ROM")
-def mbc3_rom_x_name(addr):
+def mbc3_rom_x_name():
     dlog.print_error("CAR", "mbc3_rom_x_name not implemented")
 def mbc3_ram_read(addr):
     dlog.print_error("CAR", "mbc3_ram_read not implemented")
 def mbc3_ram_write(addr, byte):
     dlog.print_error("CAR", "mbc3_ram_write not implemented")
-def mbc3_ram_name(addr):
+def mbc3_ram_name():
     dlog.print_error("CAR", "mbc3_ram_name not implemented")
 
 rom_size_map = [32, 64, 128, 256, 512, 1024, 2048, 4196]

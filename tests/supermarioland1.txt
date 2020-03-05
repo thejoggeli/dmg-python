@@ -1,0 +1,32 @@
+# end of bios
+pc = 100 --
+# wait for vblank
+pc > 0x19f --
+# fill internal RAM with 0x00
+pc > 0x01CA --
+# fill video RAM with 0x00
+pc > 0x01d9 --
+# fill sprite RAM with 0x00
+pc > 0x01E2 --
+# fill sprite ZEROPAGE with 0x00
+pc > 0x01EB --
+# write stuff to ZEROPAGE
+pc > 0x01F8 --
+# write stuff to ZEROPAGE and internal RAM (even though there is none?)
+# wait for scanline
+pc > 0x019F --
+# set some I/O ports for video and audio
+# fill internal RAM with 0x00
+pc > 0x01CA --
+# fill video RAM with 0x00
+pc > 0x01D9 --
+# fill ... 
+pc > 0x01F8 --
+
+t=10--				# go to title screen?
+
+# this will start the game?
+pc=0x4804-- 		# read from 0xFF00 (wait until press start on title screen?)
+wb 0xFF00 0x0F 		# press all buttons?
+t+1-				# run game for on second
+

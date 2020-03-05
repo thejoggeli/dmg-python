@@ -57,17 +57,17 @@ def init():
     pass
 
 def print_error(src, msg):
-    err = "[ "+src+" ]" + "\tERROR / "
-    err += "PC=" + "0x{0:0{1}X}".format(z80.state.instruction_location, 4) + " / "
-    err += "Step=" + str(z80.state.step_nr) + " / "
+    err = "[ "+src+" ]" + "\tERROR\t\t"
+    err += "PC=" + "0x{0:0{1}X}".format(z80.state.instruction_location, 4) + "\t"
+   #err += "Step=" + str(z80.state.step_nr) + " / "
     err += msg
     print(err)
     sys.exit()
 
 def print_warning(src, msg):
-    war = "[ "+src+" ]" + "\tWARNING / "
-    war += "PC=" + "0x{0:0{1}X}".format(z80.state.instruction_location, 4) + " / "
-    war += "Step=" + str(z80.state.step_nr) + " / "
+    war = "[ "+src+" ]" + "\tWARNING! \t"
+    war += "PC=" + "0x{0:0{1}X}".format(z80.state.instruction_location, 4) + "\t"
+   #war += "Step=" + str(z80.state.step_nr) + " / "
     war += msg
     print(war)
     
