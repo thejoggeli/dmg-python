@@ -15,22 +15,10 @@ def init():
         read_map[i]     = bios_read
         write_map[i]    = bios_write
         name_map[i]     = bios_name
-    for i in range(0x0100, 0x4000):
-        read_map[i]     = car.rom_0_read
-        write_map[i]    = car.rom_0_write
-        name_map[i]     = car.rom_0_name
-    for i in range(0x4000, 0x8000):
-        read_map[i]     = car.rom_x_read
-        write_map[i]    = car.rom_x_write
-        name_map[i]     = car.rom_x_name
     for i in range(0x8000, 0xA000):
         read_map[i]     = videoram_read
         write_map[i]    = videoram_write
         name_map[i]     = videorame_name
-    for i in range(0xA000, 0xC000):
-        read_map[i]     = car.ram_read
-        write_map[i]    = car.ram_write
-        name_map[i]     = car.ram_name
     for i in range(0xC000, 0xE000):
         read_map[i]     = intram_read
         write_map[i]    = intram_write
@@ -77,7 +65,7 @@ def bios_read(addr):
 def bios_write(addr, byte):
     dlog.print_error("MEM", "can't write to bios")
     pass
-def bios_name():
+def bios_name(addr):
     return "BIOS"
     
 # video ram
@@ -86,7 +74,7 @@ def videoram_read(addr):
     return videoram_mem[addr-0x8000]
 def videoram_write(addr, byte):
     videoram_mem[addr-0x8000] = byte
-def videorame_name():
+def videorame_name(addr):
     return "Video RAM"
     
 # internal ram
@@ -95,7 +83,7 @@ def intram_read(addr):
     return intram_mem[addr-0xC000]
 def intram_write(addr, byte):
     intram_mem[addr-0xC000] = byte
-def intram_name():
+def intram_name(addr):
     return "RAM (internal)"
     
 # echo of internal ram
@@ -103,7 +91,7 @@ def intramecho_read(addr):
     return intram_mem[addr-0xE000]
 def intramecho_write(addr, byte):
     intram_mem[addr-0xE000] = byte
-def intramecho_name():
+def intramecho_name(addr):
     return "RAM (echo)"
     
 # sprite attrib memory
@@ -122,24 +110,36 @@ def spritemem_name():
 def empty_read(addr):
     dlog.print_error("MEM", "empty_read not implemented")
     pass
-def empty_wirte():
+def empty_wirte(addr, byte):
     dlog.print_error("MEM", "empty_wirte not implemented")
     pass
-def empty_name():
+def empty_name(addr):
     return "I/O ports (unusable)"
 
 # I/O ports
 io_mem = [0]*0x4C
+io_write_map = [None]*0x80
+io_read_map = [None]*0x80
+io_name_map = [None]*0x80
 def io_read(addr):
-    if(dlog.enable.mem_warnings):
-        dlog.print_warning("MEM", "io_read not complete")
-    return io_mem[addr-0xFF00]
+    addr -= 0xFF00
+    if(io_read_map[addr]):
+        io_read_map[addr](addr)
+    elif(dlog.enable.mem_warnings):
+        dlog.print_warning("MEM", "io_read not complete: " + "0x{0:0{1}X}".format(addr+0xFF00, 4))
+    return io_mem[addr]
 def io_write(addr, byte):
-    if(dlog.enable.mem_warnings):
-        dlog.print_warning("MEM", "io_write not complete")
-    io_mem[addr-0xFF00] = byte
-def io_name():
-    return "I/O ports"
+    addr -= 0xFF00
+    if(io_write_map[addr]):
+        io_write_map[addr](addr, byte)
+    elif(dlog.enable.mem_warnings):
+        dlog.print_warning("MEM", "io_write not complete: " + "0x{0:0{1}X}".format(addr+0xFF00, 4))    
+    io_mem[addr] = byte
+def io_name(addr):
+    addr -= 0xFF00
+    if(io_name_map[addr]):        
+        return "I/O ports: " + io_name_map[addr](addr)
+    return "I/O ports: not implemented"
 
 # zero page
 mem_zeropage = [0]*0x100
@@ -147,7 +147,7 @@ def zeropage_read(addr):
     return mem_zeropage[addr-0xFF80]
 def zeropage_write(addr, byte):
     mem_zeropage[addr-0xFF80] = byte
-def zeropage_name():
+def zeropage_name(addr):
     return "RAM (zero page)"
 
 def read_byte(addr):
@@ -158,7 +158,7 @@ def read_byte(addr):
             "read_byte" + "\t" + 
             "0x{0:0{1}X}".format(addr, 4) + "\t" +
             "0x{0:0{1}X}".format(byte, 2) + "\t" +
-            name_map[addr]()
+            name_map[addr](addr)
         )
         return byte
     return read_map[addr](addr)
@@ -170,7 +170,7 @@ def write_byte(addr, byte):
             "write_byte" + "\t" + 
             "0x{0:0{1}X}".format(addr, 4) + "\t" +
             "0x{0:0{1}X}".format(byte, 2) + "\t" +
-            name_map[addr]()
+            name_map[addr](addr)
         )
     write_map[addr](addr, byte)
     

@@ -8,8 +8,14 @@ car.load_gb_file("roms/Super Mario Land (World).gb")
 car.print_info()
 
 z80.init()
+car.init()
 lcd.init()
 mem.init()
+
+car.map_memory()
+lcd.map_memory()
+
+car.print_info();
 
 quit = False
 steps = 0
