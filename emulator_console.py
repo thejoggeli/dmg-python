@@ -5,19 +5,11 @@ import lcd
 import cartridge as car
 import time
 import video as vid
+import events
+import gameboy
 
-car.load_gb_file("roms/Super Mario Land (JUE) (V1.1) [!].gb")
+gameboy.init()
 car.print_info()
-
-z80.init()
-car.init()
-lcd.init()
-mem.init()
-vid.init()
-
-car.map_memory()
-lcd.map_memory()
-vid.map_memory()
 
 quit = False
 steps = 0
@@ -28,9 +20,7 @@ def print_spacer():
 def do_loop():
     if(dlog.enable.sys):
         print_spacer()
-    lcd.update()
-    car.update()
-    z80.update()
+    gameboy.tick()
     
 # COMMAND .....................................................
 # q             quit

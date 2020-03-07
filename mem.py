@@ -7,18 +7,14 @@ name_map = [None]*0x10000
 
 def init():
     # load bios
-    global bios_mem
+    global bios
     with open("bios.gb", "rb") as bios_fh:    
-        bios_mem = bytearray(bios_fh.read())
+        bios = bytearray(bios_fh.read())
     # load memory functions
     for i in range(0x0000, 0x0100):
         read_map [i]    = bios_read
         write_map[i]    = bios_write
         name_map [i]    = bios_name
-    for i in range(0x8000, 0xA000):
-        read_map [i]    = videoram_read
-        write_map[i]    = videoram_write
-        name_map [i]    = videorame_name
     for i in range(0xC000, 0xE000):
         read_map [i]    = intram_read
         write_map[i]    = intram_write
@@ -32,9 +28,9 @@ def init():
         write_map[i]    = unused_write
         name_map [i]    = unused_name
     for i in range(0xFF00, 0xFF80):
-        read_map [i]    = io_read
-        write_map[i]    = io_write
-        name_map [i]    = io_name
+        read_map [i]    = iomem_read
+        write_map[i]    = iomem_write
+        name_map [i]    = iomem_name
     for i in range(0xFF4C, 0xFF80):
         read_map [i]    = unused_read
         write_map[i]    = unused_write
@@ -65,63 +61,39 @@ def write_0xFF50(addr, byte):
         dlog.print_error("MEM", "BIOS already ended")
         return
     bios_running = False
-    for i in range(0, 0x100):
-        read_map[i] = car.rom_0_read
-        write_map[i] = car.rom_0_write
-        name_map[i] = car.rom_0_name
+    car.map_memory_bios()
         
 def read_0xFF0F(addr):
-    return io_mem[0x0F]
+    return iomem[0x0F]
 def write_0xFF0F(addr, byte):
-    io_mem[0x0F] = byte
+    iomem[0x0F] = byte
 
 # bios
-bios_mem = None
+bios = None
 def bios_read(addr):
-    return bios_mem[addr]
+    return bios[addr]
 def bios_write(addr, byte):
     dlog.print_error("MEM", "can't write to bios")
     pass
 def bios_name():
     return "BIOS"
     
-# video ram
-videoram_mem = [0]*0x2000
-def videoram_read(addr):
-    return videoram_mem[addr-0x8000]
-def videoram_write(addr, byte):
-    videoram_mem[addr-0x8000] = byte
-def videorame_name():
-    return "Video RAM"
-    
 # internal ram
-intram_mem = [0]*0x2000
+intram = [0]*0x2000
 def intram_read(addr):
-    return intram_mem[addr-0xC000]
+    return intram[addr-0xC000]
 def intram_write(addr, byte):
-    intram_mem[addr-0xC000] = byte
+    intram[addr-0xC000] = byte
 def intram_name():
     return "RAM (internal)"
     
 # echo of internal ram
 def intramecho_read(addr):
-    return intram_mem[addr-0xE000]
+    return intram[addr-0xE000]
 def intramecho_write(addr, byte):
-    intram_mem[addr-0xE000] = byte
+    intram[addr-0xE000] = byte
 def intramecho_name():
     return "RAM (echo)"
-    
-# sprite attrib memory
-def spritemem_read(addr):
-    # addr-0xFE00
-    dlog.print_error("MEM", "spritemem_read not implemented")
-    pass
-def spritemem_write(addr, byte):
-    # addr-0xFE00
-    dlog.print_error("MEM", "spritemem_write not implemented")
-    pass
-def spritemem_name():
-    return "Sprite Attribute Memory"
 
 # empty but unusable for I/O
 def unused_read(addr):
@@ -136,24 +108,24 @@ def unused_name():
     return "Unused"
 
 # I/O ports
-io_mem = [0]*0x4C
-def io_read(addr):
+iomem = [0]*0x4C
+def iomem_read(addr):
     if(dlog.enable.mem_warnings):
-        dlog.print_warning("MEM", "io_read not implemented: " + "0x{0:0{1}X}".format(addr, 4))
-    return io_mem[addr-0xFF00]
-def io_write(addr, byte):
+        dlog.print_warning("MEM", "iomem_read not implemented: " + "0x{0:0{1}X}".format(addr, 4))
+    return iomem[addr-0xFF00]
+def iomem_write(addr, byte):
     if(dlog.enable.mem_warnings):
-        dlog.print_warning("MEM", "io_write not implemented: " + "0x{0:0{1}X}".format(addr, 4))    
-    io_mem[addr-0xFF00] = byte
-def io_name():
+        dlog.print_warning("MEM", "iomem_write not implemented: " + "0x{0:0{1}X}".format(addr, 4))    
+    iomem[addr-0xFF00] = byte
+def iomem_name():
     return "I/O ports: not implemented"
 
 # zero page
-mem_zeropage = [0]*0x80
+zeropage = [0]*0x80
 def zeropage_read(addr):
-    return mem_zeropage[addr-0xFF80]
+    return zeropage[addr-0xFF80]
 def zeropage_write(addr, byte):
-    mem_zeropage[addr-0xFF80] = byte
+    zeropage[addr-0xFF80] = byte
 def zeropage_name():
     return "RAM (zero page)"
     

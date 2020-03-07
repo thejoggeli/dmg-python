@@ -86,6 +86,12 @@ def map_memory():
         mem.read_map[i]     = ram_read
         mem.write_map[i]    = ram_write
         mem.name_map[i]     = ram_name
+        
+def map_memory_bios():
+    for i in range(0, 0x100):
+        mem.read_map[i]     = rom_0_read
+        mem.write_map[i]    = rom_0_write
+        mem.name_map[i]     = rom_0_name
     
 def print_info():    
     dlog.print_msg("CAR", "Title\t\t"+info.title)

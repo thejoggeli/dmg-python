@@ -1,0 +1,19 @@
+>>>> import tkinter
+>>>> root = tkinter.Tk()
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+  File "C:\pypy3.6-v7.3.0-win32\lib-python\3\tkinter\__init__.py", line 2023, in __init__
+    self.tk = _tkinter.create(screenName, baseName, className, interactive, wantobjects, useTk, sync, use)
+  File "C:\pypy3.6-v7.3.0-win32\lib_pypy\_tkinter\__init__.py", line 31, in create
+    interactive, wantobjects, wantTk, sync, use)
+  File "C:\pypy3.6-v7.3.0-win32\lib_pypy\_tkinter\app.py", line 157, in __new__
+    Tcl_AppInit(self)
+  File "C:\pypy3.6-v7.3.0-win32\lib_pypy\_tkinter\app.py", line 49, in Tcl_AppInit
+    app.raiseTclError()
+  File "C:\pypy3.6-v7.3.0-win32\lib_pypy\_tkinter\app.py", line 171, in raiseTclError
+    tklib.Tcl_GetStringResult(self.interp)).decode('utf-8'))
+_tkinter.TclError: Can't find a usable init.tcl in the following directories:
+    C:/pypy3.6-v7.3.0-win32/lib_pypy/lib/tcl8.5 C:/lib/tcl8.5 C:/lib/tcl8.5 C:/library C:/library C:/tcl8.5.2/library C:/tcl8.5.2/library
+		
+LÖSUNG
+Umgebungsvariable TCL_LIBRARY setzen auf C:\pypy3.6-v7.3.0-win32\tcl
