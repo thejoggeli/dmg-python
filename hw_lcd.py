@@ -2,6 +2,7 @@ import util_dlog as dlog
 import util_events as events
 import hw_z80 as z80
 import hw_mem as mem
+import hw_video as vid
 import ctypes
 
 WIDTH = 160
@@ -33,19 +34,21 @@ state = State()
 
 def init():
     global pixels
-    pixels_inital = [0xFF00FFFF]*WIDTH*HEIGHT
-    pixels = ((ctypes.c_uint)*(WIDTH*HEIGHT))(*pixels_inital)
-    pixels[0*WIDTH+0] = 0xFF0000FF
-    pixels[1*WIDTH+1] = 0x00FF00FF
-    pixels[2*WIDTH+2] = 0x0000FFFF
-    pixels[1*WIDTH-1] = 0xFFFFFFFF
-    pixels[1*WIDTH-2] = 0xFFFFFFFF
-    pixels[1*WIDTH-3] = 0xFFFFFFFF
-    pixels[2*WIDTH-1] = 0xFFFFFFFF
-    pixels[3*WIDTH-1] = 0xFFFFFFFF
-    pixels[WIDTH*HEIGHT-1] = 0x00FFFFFF
-    pixels[WIDTH*HEIGHT-WIDTH*1-2] = 0xFF00FFFF
-    pixels[WIDTH*HEIGHT-WIDTH*2-3] = 0xFFFF00FF
+    pixels_inital = [0x808080FF]*(256*256)
+    pixels = ((ctypes.c_uint)*(256*256))(*pixels_inital)
+    set_pixel(  0,   0, 0xFF0000FF)
+    set_pixel(  1,   1, 0x00FF00FF)
+    set_pixel(  2,   2, 0x0000FFFF)
+    set_pixel(157,   0, 0x00000000)
+    set_pixel(158,   0, 0x00000000)
+    set_pixel(159,   1, 0xFFFFFFFF)
+    set_pixel(159,   2, 0xFFFFFFFF)
+    set_pixel(159, 143, 0x00FFFFFF)
+    set_pixel(158, 142, 0xFF00FFFF)
+    set_pixel(157, 141, 0xFFFF00FF)
+    
+def set_pixel(x, y, rgba):
+    pixels[y*256+x] = rgba
     
 def map_memory():
     mem.write_map[0xFF40] = write_byte_0xFF40
@@ -106,12 +109,15 @@ def update():
     # TODO implement 0xFF41 
     # TODO implement 0xFF45
     
+bg_color_map = [None]*4
+    
 def render():
+
     lcdc   = mem.iomem[0x40]
     lcdc_7 = (lcdc>>7)&0x01 # LCD Control Operation
     lcdc_6 = (lcdc>>6)&0x01 # Window Tile Map Display Select
     lcdc_5 = (lcdc>>5)&0x01 
-    lcdc_4 = (lcdc>>4)&0x01 
+    lcdc_4 = (lcdc>>4)&0x01 # BG & Window Tile Data Select
     lcdc_3 = (lcdc>>3)&0x01 # BG Tile Map Display Select
     lcdc_2 = (lcdc>>2)&0x01 
     lcdc_1 = (lcdc>>1)&0x01 
@@ -126,20 +132,88 @@ def render():
     # Background & Window Display
     if(lcdc_0 == 1):
         # BG & Window Palette Data
-        bgp    = mem.iomem[0x47]
-        bgp_76 = (bgp>>6)&0x3
-        bgp_54 = (bgp>>4)&0x3
-        bgp_32 = (bgp>>2)&0x3
-        bgp_10 = (bgp>>0)&0x3        
+        bgp    = mem.iomem[0x47]        
+        bg_color_map[0] = color_map[(bgp>>0)&0x3]
+        bg_color_map[1] = color_map[(bgp>>2)&0x3]
+        bg_color_map[2] = color_map[(bgp>>4)&0x3]
+        bg_color_map[3] = color_map[(bgp>>6)&0x3]
+                
         # BG Tile Map Display Select
+        bg_tile_map_ptr_start = 0
+        bg_tile_map_ptr_end   = 0 
         if(lcdc_3 == 0):
-            # $9800-$9BFF
-            pass
+            # 0x9800-0x9BFF
+            bg_tile_map_ptr_start = 0x9800-0x8000
+            bg_tile_map_ptr_end   = 0x9C00-0x8000
         else: 
-            # $9C00-$9FFF
-            pass
-            
-    
+            # 0x9C00-0x9FFF
+            bg_tile_map_ptr_start = 0x9C00-0x8000
+            bg_tile_map_ptr_end   = 0xA000-0x8000
+                
+        # BG & Window Tile Data Select
+        if(lcdc_4 == 0):
+            # 0x8000-0x8FFF with unsigned offset
+            tile_x_index = 0
+            pixel_index_offset = 0            
+            for bg_tile_map_ptr in range(bg_tile_map_ptr_start, bg_tile_map_ptr_end):
+                # find tile data
+                bg_tile_data_ptr = vid.videoram[bg_tile_map_ptr]            
+                if(bg_tile_data_ptr > 127):
+                    bg_tile_data_ptr -= 256
+                bg_tile_data_ptr = bg_tile_data_ptr*8 + 0x800  
+                # draw tile
+                pixel_index = pixel_index_offset
+                for i in range(0, 8):          
+                    # left pixels     
+                    byte_1 = vid.videoram[bg_tile_data_ptr]       
+                    byte_2 = vid.videoram[bg_tile_data_ptr+1]       
+                    pixels[pixel_index+0] = bg_color_map[((byte_2>>6)&0x2)|((byte_1>>7)&0x1)].c_rgba
+                    pixels[pixel_index+1] = bg_color_map[((byte_2>>5)&0x2)|((byte_1>>6)&0x1)].c_rgba
+                    pixels[pixel_index+2] = bg_color_map[((byte_2>>4)&0x2)|((byte_1>>5)&0x1)].c_rgba
+                    pixels[pixel_index+3] = bg_color_map[((byte_2>>3)&0x2)|((byte_1>>4)&0x1)].c_rgba
+                    pixels[pixel_index+4] = bg_color_map[((byte_2>>2)&0x2)|((byte_1>>3)&0x1)].c_rgba
+                    pixels[pixel_index+5] = bg_color_map[((byte_2>>1)&0x2)|((byte_1>>2)&0x1)].c_rgba
+                    pixels[pixel_index+6] = bg_color_map[((byte_2>>0)&0x2)|((byte_1>>1)&0x1)].c_rgba
+                    pixels[pixel_index+7] = bg_color_map[((byte_2<<1)&0x2)|((byte_1>>0)&0x1)].c_rgba
+                    pixel_index += 256
+                    bg_tile_data_ptr += 2                
+                # next tile
+                tile_x_index += 1
+                if(tile_x_index == 32):
+                    tile_x_index = 0
+                    pixel_index_offset += (256*7+8)
+                else:
+                    pixel_index_offset += 8         
+        else:
+            # 0x8000-0x8FFF with unsigned offset
+            tile_x_index = 0
+            pixel_index_offset = 0            
+            for bg_tile_map_ptr in range(bg_tile_map_ptr_start, bg_tile_map_ptr_end):
+                # find tile data
+                bg_tile_data_ptr = vid.videoram[bg_tile_map_ptr]*16
+                # draw tile
+                pixel_index = pixel_index_offset
+                for i in range(0, 8):          
+                    # left pixels     
+                    byte_1 = vid.videoram[bg_tile_data_ptr]       
+                    byte_2 = vid.videoram[bg_tile_data_ptr+1]       
+                    pixels[pixel_index+0] = bg_color_map[((byte_2>>6)&0x2)|((byte_1>>7)&0x1)].c_rgba
+                    pixels[pixel_index+1] = bg_color_map[((byte_2>>5)&0x2)|((byte_1>>6)&0x1)].c_rgba
+                    pixels[pixel_index+2] = bg_color_map[((byte_2>>4)&0x2)|((byte_1>>5)&0x1)].c_rgba
+                    pixels[pixel_index+3] = bg_color_map[((byte_2>>3)&0x2)|((byte_1>>4)&0x1)].c_rgba
+                    pixels[pixel_index+4] = bg_color_map[((byte_2>>2)&0x2)|((byte_1>>3)&0x1)].c_rgba
+                    pixels[pixel_index+5] = bg_color_map[((byte_2>>1)&0x2)|((byte_1>>2)&0x1)].c_rgba
+                    pixels[pixel_index+6] = bg_color_map[((byte_2>>0)&0x2)|((byte_1>>1)&0x1)].c_rgba
+                    pixels[pixel_index+7] = bg_color_map[((byte_2<<1)&0x2)|((byte_1>>0)&0x1)].c_rgba
+                    pixel_index += 256
+                    bg_tile_data_ptr += 2                
+                # next tile
+                tile_x_index += 1
+                if(tile_x_index == 32):
+                    tile_x_index = 0
+                    pixel_index_offset += (256*7+8)
+                else:
+                    pixel_index_offset += 8
     return
     
 def read_byte(addr):

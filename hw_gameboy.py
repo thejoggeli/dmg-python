@@ -25,3 +25,9 @@ def tick():
     z80.update()
     lcd.update()
     car.update()
+
+def run_for_n_seconds(n):
+    # loop for N seconds
+    target_time = n + z80.state.time_passed
+    while(z80.state.time_passed < target_time):
+        tick()

@@ -4,6 +4,7 @@ import util_config as config
 import hw_lcd as lcd
 import hw_z80 as z80
 import hw_gameboy as gameboy
+import hw_mem as mem
 import sdlboy_text
 import sdlboy_input
 import sdlboy_time
@@ -19,7 +20,8 @@ class Glob:
     window_scale = 1
     window_rect = None
     screen_texture = None
-    screen_rect = None
+    screen_rect_texture = None
+    screen_rect_src = None
     screen_rect_dst = None
     exit_requested = False
     vblank_occured = False
@@ -27,12 +29,14 @@ class Glob:
 glob = Glob()
 
 def main(): 
+
+    dlog.enable.errors()
     
     gameboy.init()
+   #gameboy.run_for_n_seconds(5)
     events.subscribe(events.EVENT_SCANLINE_CHANGE, on_scanline_change)
     events.subscribe(events.EVENT_VIDEORAM_CHANGE, on_videoram_change)
     events.subscribe(events.EVENT_SPRITEMEM_CHANGE, on_spritemem_change)
-    dlog.enable.errors();
    
     sdl2.SDL_Init(sdl2.SDL_INIT_VIDEO)
         
@@ -40,8 +44,9 @@ def main():
     glob.window_rect = sdl2.SDL_Rect(0, 0, 800, 600) 
     
     # screen rect
-    glob.screen_rect     = sdl2.SDL_Rect(0, 0, lcd.WIDTH, lcd.HEIGHT)
-    glob.screen_rect_dst = sdl2.SDL_Rect(0, 0, lcd.WIDTH, lcd.HEIGHT)
+    glob.screen_rect_texture = sdl2.SDL_Rect(0, 0, 256, 256)
+    glob.screen_rect_src     = sdl2.SDL_Rect(0, 0, lcd.WIDTH, lcd.HEIGHT)
+    glob.screen_rect_dst     = sdl2.SDL_Rect(0, 0, 0, 0)
     
     # window
     window_flags = 0
@@ -67,8 +72,8 @@ def main():
         glob.renderer, 
         sdl2.SDL_PIXELFORMAT_RGBA8888, 
         sdl2.SDL_TEXTUREACCESS_STREAMING,
-        glob.screen_rect.w,
-        glob.screen_rect.h
+        glob.screen_rect_texture.w,
+        glob.screen_rect_texture.h
     )
     
     # text
@@ -111,18 +116,20 @@ def main():
             lcd.render()
                     
         # render
-        sdl2.SDL_SetRenderDrawColor(glob.renderer, 0x33, 0x33, 0x33, 0xFF)
+        sdl2.SDL_SetRenderDrawColor(glob.renderer, 0, 0, 0, 0xFF)
         sdl2.SDL_RenderClear(glob.renderer)
         sdl2.SDL_UpdateTexture(
             glob.screen_texture, 
-            glob.screen_rect,
+            glob.screen_rect_texture,
             lcd.pixels,
-            glob.screen_rect.w*4
+            256*4
         )
+        glob.screen_rect_src.x = mem.read_byte_silent(0xFF43)
+        glob.screen_rect_src.y = mem.read_byte_silent(0xFF42)
         sdl2.SDL_RenderCopy(
             glob.renderer, 
             glob.screen_texture, 
-            glob.screen_rect, 
+            glob.screen_rect_src, 
             glob.screen_rect_dst
         )
                             
@@ -151,6 +158,7 @@ def main():
         sleep_duration = 1.0/60.0 - frame_time_passed
         if(sleep_duration > 0.0):
             sdl2.SDL_Delay(int(sleep_duration*1000.0))
+            pass
     
     # shutdown
     sdl2.SDL_DestroyWindow(glob.window)
@@ -191,8 +199,8 @@ def on_window_resize():
     window_wf = float(glob.window_rect.w)
     window_hf = float(glob.window_rect.h)
     window_af = window_wf/window_hf
-    screen_wf = float(glob.screen_rect.w)
-    screen_hf = float(glob.screen_rect.h)
+    screen_wf = float(glob.screen_rect_src.w)
+    screen_hf = float(glob.screen_rect_src.h)
     screen_af = screen_wf/screen_hf
     
     if(window_af > screen_af):

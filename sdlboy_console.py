@@ -349,6 +349,7 @@ def init():
 def open():
     global is_open
     sdl2.SDL_SetRenderDrawBlendMode(glob.renderer, sdl2.SDL_BLENDMODE_BLEND)
+    sdl2.SDL_StartTextInput();
     is_open = True
     set_control(True)
     resize()
