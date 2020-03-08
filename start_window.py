@@ -1,6 +1,6 @@
-import emulator_window as emulator
+import sdlboy_window
 import sys
 
 if __name__ == "__main__":
-    sys.exit(emulator.main())
+    sys.exit(sdlboy_window.main())
 

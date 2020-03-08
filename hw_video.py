@@ -1,6 +1,6 @@
-import mem
-import dlog
-import events
+import hw_mem as mem
+import util_dlog as dlog
+import util_events as events
 
 def init():
     # TODO implement sprite RAM bug

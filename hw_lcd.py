@@ -1,7 +1,7 @@
-import z80
-import dlog
-import mem
-import events
+import util_dlog as dlog
+import util_events as events
+import hw_z80 as z80
+import hw_mem as mem
 import ctypes
 
 WIDTH = 160

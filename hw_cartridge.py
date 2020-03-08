@@ -1,5 +1,5 @@
-import dlog 
-import mem
+import util_dlog as dlog
+import hw_mem as mem
 
 class Info:
     title = ""

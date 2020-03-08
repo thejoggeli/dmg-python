@@ -1,12 +1,12 @@
-import dlog
-import z80
-import mem
-import lcd
-import cartridge as car
 import time
-import video as vid
-import events
-import gameboy
+import hw_z80 as z80
+import hw_mem as mem
+import hw_lcd as lcd
+import hw_cartridge as car
+import hw_video as vid
+import hw_gameboy as gameboy
+import util_events as events
+import util_dlog as dlog
 
 gameboy.init()
 car.print_info()

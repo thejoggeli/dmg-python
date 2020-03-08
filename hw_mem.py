@@ -1,5 +1,5 @@
-import dlog
-import cartridge as car
+import util_dlog as dlog
+import hw_cartridge as car
 
 read_map = [None]*0x10000
 write_map = [None]*0x10000

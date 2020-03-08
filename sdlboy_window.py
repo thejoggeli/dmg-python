@@ -1,12 +1,15 @@
-import dlog
-import lcd
-import z80
+import util_dlog as dlog
+import util_events as events
+import hw_lcd as lcd
+import hw_z80 as z80
+import hw_gameboy as gameboy
+import sdlboy_text
+import sdlboy_input
+import sdlboy_time
+import sdlboy_console
 import ctypes
 import sdl2
-import events
-import gameboy
 import time
-import ztext
 
 class Glob:
     renderer = None
@@ -19,6 +22,7 @@ class Glob:
     screen_rect_dst = None
     exit_requested = False
     vblank_occured = False
+    in_console = False
 glob = Glob()
 
 def main(): 
@@ -32,7 +36,7 @@ def main():
     sdl2.SDL_Init(sdl2.SDL_INIT_VIDEO)
         
     # window rect
-    glob.window_rect = sdl2.SDL_Rect(0, 0, 1280, 720) 
+    glob.window_rect = sdl2.SDL_Rect(0, 0, 800, 600) 
     
     # screen rect
     glob.screen_rect     = sdl2.SDL_Rect(0, 0, lcd.WIDTH, lcd.HEIGHT)
@@ -64,41 +68,63 @@ def main():
         glob.screen_rect.h
     )
     
+    # text
+    sdlboy_text.init(glob.renderer)    
+   #sdlboy_text.load_font("console", file="res/font.png", char_size=(7, 9))
+    sdlboy_text.load_font("console", file="res/font_large.png", char_size=(14, 18))
+           
+    # input
+    sdlboy_input.init()
+    
+    # console
+    sdlboy_console.init()
+    sdlboy_console.open()
+            
     # trigger resize
     on_window_resize()
-    
-    # ztext
-    ztext.init(glob.renderer)    
-    ztext.load_font("def", file="res/font.png", char_size=(14, 18))
-    
-    debug_texts = [None]*8
-    for i in range(0, len(debug_texts)):
-        debug_texts[i] = ztext.Text(ztext.get_font("def"), "test-"+str(i))
-        debug_texts[i].set_position(4, 4+i*22)    
-        debug_texts[i].set_scale(1)    
         
     # start main loop
-    time_start = time.time()
+    sdlboy_time.start()
     event = sdl2.SDL_Event()
     while(not glob.exit_requested):
     
         frame_start_time = time.time()
+        sdlboy_time.update()
+        sdlboy_input.clear_on_keys()
         
         # poll events
         while sdl2.SDL_PollEvent(ctypes.byref(event)) != 0:
-            if event.type == sdl2.SDL_QUIT:
+            if(event.type == sdl2.SDL_KEYDOWN):
+                sdlboy_input.handle_key_down(event)
+                # toggle console
+                if(event.key.keysym.sym == 1073741882):
+                    if(sdlboy_console.is_open):
+                        sdlboy_console.close()
+                    else:
+                        sdlboy_console.open()                        
+            elif(event.type == sdl2.SDL_KEYUP):
+                sdlboy_input.handle_key_up(event)
+            elif event.type == sdl2.SDL_QUIT:
                 glob.exit_requested = True
             elif event.type == sdl2.SDL_WINDOWEVENT:
                 if(event.window.event == sdl2.SDL_WINDOWEVENT_RESIZED):
                     on_window_resize()
+            # let console handle events
+            if(sdlboy_console.is_open):
+                sdlboy_console.handle_event(event)                
+
+        # update console
+        if(sdlboy_console.is_open):
+            sdlboy_console.update()
+            
+        if(not sdlboy_console.has_control):
+            # tick until vblank
+            glob.vblank_occured = False
+            while(not glob.vblank_occured):
+                gameboy.tick()
                     
-        # tick until vblank
-        glob.vblank_occured = False
-        while(not glob.vblank_occured):
-            gameboy.tick()
-                
         # render
-        sdl2.SDL_SetRenderDrawColor(glob.renderer, 0x33, 0x33, 0x33, 0xFF)
+        sdl2.SDL_SetRenderDrawColor(glob.renderer, 0, 0, 0, 0xFF)
         sdl2.SDL_RenderClear(glob.renderer)
         sdl2.SDL_UpdateTexture(
             glob.screen_texture, 
@@ -112,9 +138,8 @@ def main():
             glob.screen_rect, 
             glob.screen_rect_dst
         )
-        
-        real_time_passed = time.time() - time_start
-        
+                            
+        """
         # window title
         title = b"Dot Matrix Game"
         # cpu time
@@ -123,34 +148,13 @@ def main():
         # real time
         title += b" | Real: "
         title += bytes("{0:.1f}".format(round(real_time_passed, 1)).encode("UTF-8"))
-        # registers
-        title += b" | PC: "
-        title += bytes("0x{0:0{1}X}".format(z80.reg.pc, 4).encode("UTF-8"))
-        title += b" | SP: "
-        title += bytes("0x{0:0{1}X}".format(z80.reg.sp, 4).encode("UTF-8"))
-        title += b" | AF: "
-        title += bytes("0x{0:0{1}X}".format(z80.reg.get_af(), 4).encode("UTF-8"))
-        title += b" | BC: "
-        title += bytes("0x{0:0{1}X}".format(z80.reg.get_bc(), 4).encode("UTF-8"))
-        title += b" | DE: "
-        title += bytes("0x{0:0{1}X}".format(z80.reg.get_de(), 4).encode("UTF-8"))
-        title += b" | HL: "
-        title += bytes("0x{0:0{1}X}".format(z80.reg.get_hl(), 4).encode("UTF-8"))
-        
-        #sdl2.SDL_SetWindowTitle(glob.window, title)
-        
-        debug_texts[0].value = "T(Z80):" + "{0:.1f}".format(round(z80.state.time_passed, 1))
-        debug_texts[1].value = "T(IRL):" + "{0:.1f}".format(round(real_time_passed, 1))
-        debug_texts[2].value = "PC:" + "0x{0:0{1}X}".format(z80.reg.pc, 4)
-        debug_texts[3].value = "SP:" + "0x{0:0{1}X}".format(z80.reg.sp, 4)
-        debug_texts[4].value = "AF:" + "0x{0:0{1}X}".format(z80.reg.get_af(), 4)
-        debug_texts[5].value = "BC:" + "0x{0:0{1}X}".format(z80.reg.get_bc(), 4)
-        debug_texts[6].value = "DE:" + "0x{0:0{1}X}".format(z80.reg.get_de(), 4)
-        debug_texts[7].value = "HL:" + "0x{0:0{1}X}".format(z80.reg.get_hl(), 4)
+        # set window title
+        sdl2.SDL_SetWindowTitle(glob.window, title)
+        """
                 
-        for i in range(0, len(debug_texts)):
-            debug_texts[i].update()
-            debug_texts[i].render()        
+        # render console        
+        if(sdlboy_console.is_open):
+            sdlboy_console.render()
         
         # present
         sdl2.SDL_RenderPresent(glob.renderer)
@@ -189,6 +193,8 @@ def on_window_resize():
         glob.screen_rect_dst.h = int(window_wf/screen_af)
         glob.screen_rect_dst.x = 0
         glob.screen_rect_dst.y = int(window_hf/2.0-window_wf/screen_af/2.0)
+    if(sdlboy_console.is_open):
+        sdlboy_console.resize()
         
 def on_scanline_change(data):
     if(data == 0):

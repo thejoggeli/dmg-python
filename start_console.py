@@ -1,6 +1,6 @@
-import emulator_console as emulator
+import debug_console
 import sys
 
 if __name__ == "__main__":
-    sys.exit(emulator.main())
+    sys.exit(debug_console.main())
 

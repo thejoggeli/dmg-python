@@ -1,6 +1,6 @@
-import mem
-import z80
-import dlog
+import hw_mem as mem
+import hw_z80 as z80
+import util_dlog as dlog
     
 def load_binary_file(file):
     bytes = None

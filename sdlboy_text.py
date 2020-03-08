@@ -1,4 +1,4 @@
-import dlog
+import util_dlog as dlog
 import os
 import sdl2
 from sdl2 import sdlimage as sdlimage
@@ -15,6 +15,7 @@ def load_font(name, file="font.png", char_size=(14,18), characters=None):
     file = os.path.abspath(file)
     font = Font(name, file, char_size, characters)
     glob.fonts[name] = font
+    return font
     
 def get_font(name):
     return glob.fonts[name]
@@ -85,7 +86,7 @@ class Text:
     height = 0
     target_rect = 0
     scale = 1
-    def __init__(self, font, value, buffer_size=32):
+    def __init__(self, font=None, value="", buffer_size=32):
         self.font = font
         self.value = value      
         self.target_rect = sdl2.SDL_Rect(
@@ -111,7 +112,7 @@ class Text:
         self.buffer_rect.w = self.font.char_width * self.buffer_size
         self.buffer_rect.h = self.font.char_height
         if(self.texture):
-            sdl2.SDL_FreeTexture(self.texture)            
+            sdl2.SDL_DestroyTexture(self.texture)            
         self.texture = sdl2.SDL_CreateTexture(
             glob.renderer, 
             sdl2.SDL_PIXELFORMAT_RGBA8888, 
@@ -124,7 +125,8 @@ class Text:
         self.target_rect.w = int(self.scale*self.buffer_rect.w)
         self.target_rect.h = int(self.scale*self.buffer_rect.h)
     def update(self):
-        sdl2.SDL_SetRenderTarget(glob.renderer, self.texture) 
+        prev_target = sdl2.SDL_GetRenderTarget(glob.renderer)
+        sdl2.SDL_SetRenderTarget(glob.renderer, self.texture)
         sdl2.SDL_SetRenderDrawColor(glob.renderer, 0, 0, 0, 0)
         sdl2.SDL_RenderClear(glob.renderer);
         length = len(self.value)
@@ -142,7 +144,7 @@ class Text:
             )
             self.char_dst_rect.x += self.font.char_width
         self.width = length*self.font.char_width
-        sdl2.SDL_SetRenderTarget(glob.renderer, None)
+        sdl2.SDL_SetRenderTarget(glob.renderer, prev_target)
     def set_position(self, x, y):
         self.target_rect.x = x
         self.target_rect.y = y

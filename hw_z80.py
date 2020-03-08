@@ -1,6 +1,6 @@
-import dlog
-import mem
-import gbmath
+import util_dlog as dlog
+import util_gbmath as gbmath
+import hw_mem as mem
 
 OPCODE_INFO_SIZE = 0
 OPCODE_INFO_NAME = 1

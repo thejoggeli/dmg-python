@@ -1,5 +1,5 @@
-import z80
-import mem
+import hw_z80 as z80
+import hw_mem as mem
 import sys
 
 silent = False
@@ -56,7 +56,8 @@ enable = Enable(True);
 def init():
     pass
 
-def print_error(src, msg):
+
+def print_error_console(src, msg):
     err = "[ "+src+" ]" + "\tERROR\t\t"
     err += "PC=" + "0x{0:0{1}X}".format(z80.state.instruction_location, 4) + "\t"
    #err += "Step=" + str(z80.state.step_nr) + " / "
@@ -64,12 +65,16 @@ def print_error(src, msg):
     print(err)
     sys.exit()
 
-def print_warning(src, msg):
+def print_warning_console(src, msg):
     war = "[ "+src+" ]" + "\tWARNING! \t"
     war += "PC=" + "0x{0:0{1}X}".format(z80.state.instruction_location, 4) + "\t"
    #war += "Step=" + str(z80.state.step_nr) + " / "
     war += msg
     print(war)
     
-def print_msg(src, msg):
+def print_msg_console(src, msg):
     print("[ "+src+" ]" + "\t" + msg)
+
+print_error = print_error_console
+print_warning = print_warning_console
+print_msg = print_msg_console

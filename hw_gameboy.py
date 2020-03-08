@@ -1,13 +1,9 @@
-import dlog
-import z80
-import mem
-import lcd
-import cartridge as car
-import time
-import video as vid
-import events
-
-
+import util_dlog as dlog
+import hw_z80 as z80
+import hw_mem as mem
+import hw_lcd as lcd
+import hw_cartridge as car
+import hw_video as vid
 
 def init():
     car.load_gb_file("roms/Super Mario Land (JUE) (V1.1) [!].gb")
