@@ -7,7 +7,21 @@ import ctypes
 WIDTH = 160
 HEIGHT = 144
 
-pixels = None 
+class Color:
+    def __init__(self, r, g, b, a=255):
+        self.r = r
+        self.g = g
+        self.b = b
+        self.a = a
+        self.c_rgba = (ctypes.c_uint)((r<<24)|(r<<16)|(r<<8)|a)
+        
+color_map = [None]*4
+color_map[3] = Color(0x00, 0x00, 0x00)
+color_map[2] = Color(0x55, 0x55, 0x55)
+color_map[1] = Color(0xAA, 0xAA, 0xAA)
+color_map[0] = Color(0xFF, 0xFF, 0xFF)
+
+pixels = None
 
 class State:
     enabled = 1
@@ -19,7 +33,8 @@ state = State()
 
 def init():
     global pixels
-    pixels = ((ctypes.c_int)*(WIDTH*HEIGHT))()
+    pixels_inital = [0xFF00FFFF]*WIDTH*HEIGHT
+    pixels = ((ctypes.c_uint)*(WIDTH*HEIGHT))(*pixels_inital)
     pixels[0*WIDTH+0] = 0xFF0000FF
     pixels[1*WIDTH+1] = 0x00FF00FF
     pixels[2*WIDTH+2] = 0x0000FFFF
@@ -90,6 +105,42 @@ def update():
     # TODO implement 0xFF40   
     # TODO implement 0xFF41 
     # TODO implement 0xFF45
+    
+def render():
+    lcdc   = mem.iomem[0x40]
+    lcdc_7 = (lcdc>>7)&0x01 # LCD Control Operation
+    lcdc_6 = (lcdc>>6)&0x01 # Window Tile Map Display Select
+    lcdc_5 = (lcdc>>5)&0x01 
+    lcdc_4 = (lcdc>>4)&0x01 
+    lcdc_3 = (lcdc>>3)&0x01 # BG Tile Map Display Select
+    lcdc_2 = (lcdc>>2)&0x01 
+    lcdc_1 = (lcdc>>1)&0x01 
+    lcdc_0 = (lcdc>>0)&0x01 # BG & Window Display
+    
+    # LCD operation is off
+    if(lcdc_7 == 0):
+        for i in range(0, len(pixels)):
+            pixels[i] = color_map[0].c_rgba
+        return
+        
+    # Background & Window Display
+    if(lcdc_0 == 1):
+        # BG & Window Palette Data
+        bgp    = mem.iomem[0x47]
+        bgp_76 = (bgp>>6)&0x3
+        bgp_54 = (bgp>>4)&0x3
+        bgp_32 = (bgp>>2)&0x3
+        bgp_10 = (bgp>>0)&0x3        
+        # BG Tile Map Display Select
+        if(lcdc_3 == 0):
+            # $9800-$9BFF
+            pass
+        else: 
+            # $9C00-$9FFF
+            pass
+            
+    
+    return
     
 def read_byte(addr):
     return mem.iomem[addr-0xFF00]

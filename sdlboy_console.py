@@ -176,6 +176,7 @@ class Inputview:
     prev_messages = []
     prev_messages_ptr = -1
     prev_messages_max = 32
+    cursor_position = 4
     def __init__(self):
         self.font = sdlboy_text.get_font("console")   
         self.text = sdlboy_text.Text(
@@ -197,8 +198,8 @@ class Inputview:
         self.cursor_timer += sdlboy_time.delta_time
         if(self.cursor_timer >= 1.5):
             self.cursor_timer = 0.0
-        if(self.cursor_timer >= 0.75):
-            self.cursor_rect.x = self.viewport.x + self.text.width
+        if(self.cursor_timer <= 0.75):
+            self.cursor_rect.x = self.viewport.x + self.cursor_position*self.font.char_width
             self.cursor_rect.y = self.viewport.y + textview.line_height
             self.cursor_rect.w = self.font.char_width
             self.cursor_rect.h = -4
@@ -213,6 +214,10 @@ class Inputview:
         user_input = self.text.value[4:].strip()
         textview.print_line(self.text.value.strip())
         if(len(self.text.value.strip()) > 4):
+            try:
+                self.prev_messages.remove(self.text.value.strip())
+            except:
+                pass
             self.prev_messages.append(self.text.value.strip())
             self.prev_messages_ptr = len(self.prev_messages)-1
             if(len(self.prev_messages) > self.prev_messages_max):
@@ -224,12 +229,105 @@ class Inputview:
             config.save()
         self.text.value = ">>> "
         self.text.update()
-        if(has_control):
-            try:
-                input_handler.handle_input(user_input)
-            except Exception as e:
-                dlog.print_msg("SYS", str(e))
-                textview.print_line(str(e))
+        self.cursor_position = 4
+        self.cursor_timer = 0.25        
+        try:
+            input_handler.handle_input(user_input)
+        except Exception as e:
+            dlog.print_msg("SYS", str(e))
+            textview.print_line(str(e))
+        dlog.enable.errors();    
+    def write_chars(self, chars):
+        self.text.value = self.text.value[:self.cursor_position] \
+                        + chars \
+                        + self.text.value[self.cursor_position:]
+        self.text.update()
+        self.cursor_position += len(chars)
+        self.cursor_timer = 0.25           
+    def write_delete(self, ctrl):
+        if(self.cursor_position >= len(self.text.value)):
+            return
+        subtext = self.text.value[self.cursor_position:].strip()
+        left = self.cursor_position
+        if(ctrl):
+            index = len(subtext)
+            try: 
+                index = subtext.index(" ")+1
+            except ValueError:
+                pass
+            self.text.value = self.text.value[0:left] + subtext[index:]
+        else:
+            self.text.value = self.text.value[0:self.cursor_position] \
+                            + self.text.value[self.cursor_position+1:]
+        self.text.update()       
+        self.cursor_timer = 0.25            
+    def write_backspace(self, ctrl):
+        if(self.cursor_position <= 4):
+            return
+        subtext = self.text.value[0:self.cursor_position].strip()
+        right = self.cursor_position
+        if(ctrl):
+            index = 4
+            try: 
+                index = subtext.rindex(" ", 4)
+            except ValueError:
+                pass
+            self.text.value = self.text.value[0:index] + self.text.value[right:]
+            self.cursor_position = index
+        else:
+            self.text.value = self.text.value[0:self.cursor_position-1] \
+                            + self.text.value[self.cursor_position:]                              
+            self.cursor_position -= 1
+        self.text.update()        
+        self.cursor_timer = 0.25           
+    def move_cursor(self, delta, ctrl):
+        if(delta == 1):
+            if(ctrl):
+                while(True):                
+                    self.cursor_position += 1
+                    if(self.cursor_position >= len(self.text.value)):
+                        self.cursor_position = len(self.text.value)
+                        break
+                    if(self.text.value[self.cursor_position-1] == " "):
+                        break
+            else:
+                self.cursor_position += 1
+                if(self.cursor_position >= len(self.text.value)):
+                    self.cursor_position = len(self.text.value)        
+        elif(delta == -1):
+            if(ctrl):
+                while(True):                
+                    self.cursor_position -= 1
+                    if(self.cursor_position <= 4):
+                        self.cursor_position = 4
+                        break
+                    if(self.text.value[self.cursor_position-1] == " "):
+                        break
+            else:
+                self.cursor_position -= 1
+                if(self.cursor_position <= 4):
+                    self.cursor_position = 4
+        self.cursor_timer = 0.25            
+    def move_history_up(self):
+        if(self.prev_messages_ptr >= 0):
+            self.text.value = self.prev_messages[self.prev_messages_ptr]
+            self.prev_messages_ptr -= 1
+        self.cursor_position = len(self.text.value)
+        self.cursor_timer = 0.25           
+    def move_history_down(self):
+        self.prev_messages_ptr += 1
+        if(self.prev_messages_ptr > len(self.prev_messages)-1):
+            self.prev_messages_ptr = len(self.prev_messages)-1
+        actual_ptr = self.prev_messages_ptr+1
+        if(actual_ptr < len(self.prev_messages)): 
+            self.text.value = self.prev_messages[actual_ptr]
+        else:  
+            self.text.value = ">>> "
+        self.cursor_position = len(self.text.value)
+        self.cursor_timer = 0.25           
+    def clear(self):
+        self.text.value = ">>> "
+        self.cursor_position = 4
 
 class Line:
     text = None
@@ -249,19 +347,22 @@ def init():
    #dlog.print_msg = print_msg
         
 def open():
-    global is_open, has_control
+    global is_open
     sdl2.SDL_SetRenderDrawBlendMode(glob.renderer, sdl2.SDL_BLENDMODE_BLEND)
     is_open = True
-    has_control = True
+    set_control(True)
     resize()
-    sdl2.SDL_StartTextInput();
-    dlog.enable.all()
+    dlog.enable.errors()
 def close():
-    global is_open, has_control
+    global is_open
     is_open = False
     sdl2.SDL_StopTextInput();
-    has_control = False
+    set_control(False)
     dlog.enable.errors()
+    
+def set_control(b):
+    global has_control
+    has_control = b
     
 def update():    
     pass
@@ -281,30 +382,29 @@ def render():
 def handle_event(event):
     global has_control       
     if(event.type == sdl2.SDL_TEXTINPUT):     
-        inputview.text.value += event.text.text.decode("utf-8")
-        inputview.text.update()
+        inputview.write_chars(event.text.text.decode("utf-8"))
     if(event.type == sdl2.SDL_KEYDOWN):
         key = event.key.keysym.sym
-        if(key == 8 and len(inputview.text.value) > 4):
+        if(key == 127):
+            if(sdlboy_input.is_key_down(1073742048)):
+                # CTRL-Delete
+                inputview.write_delete(True)
+            else:
+                # Delete
+                inputview.write_delete(False)
+        elif(key == 8):
             if(sdlboy_input.is_key_down(1073742048)):
                 # CTRL-Backspace
-                inputview.text.value = inputview.text.value.rstrip()
-                try: 
-                    index = inputview.text.value.rindex(" ", 4)
-                    inputview.text.value = inputview.text.value[0:index]
-                except ValueError:
-                    inputview.text.value = ">>> "
+                inputview.write_backspace(True)
             else:
                 # Backspace
-                inputview.text.value = inputview.text.value[0:len(inputview.text.value)-1]
-            inputview.text.update()
+                inputview.write_backspace(False)
         elif(key == 13):
             # Enter
             inputview.on_enter()
         elif(key == 99 and sdlboy_input.is_key_down(1073742048)):
             # CTRL-C
-            inputview.text.value = ">>> "
-            inputview.text.update()            
+            inputview.clear()
         elif(key == 1073741883):         
             has_control = not has_control
             if(has_control):
@@ -313,20 +413,22 @@ def handle_event(event):
                 dlog.enable.errors()
         elif(key == 1073741906):
             # Up
-            if(inputview.prev_messages_ptr >= 0):
-                inputview.text.value = inputview.prev_messages[inputview.prev_messages_ptr]
-                inputview.prev_messages_ptr -= 1
+            inputview.move_history_up()
         elif(key == 1073741905):
             # Down
-            inputview.prev_messages_ptr += 1
-            if(inputview.prev_messages_ptr > len(inputview.prev_messages)-1):
-                inputview.prev_messages_ptr = len(inputview.prev_messages)-1
-            actual_ptr = inputview.prev_messages_ptr+1
-            if(actual_ptr < len(inputview.prev_messages)): 
-                inputview.text.value = inputview.prev_messages[actual_ptr]
-            else:  
-                inputview.text.value = ">>> "
-            
+            inputview.move_history_down()
+        elif(key == 1073741903):
+            # right
+            if(sdlboy_input.is_key_down(1073742048)):
+                inputview.move_cursor(+1, True)
+            else:
+                inputview.move_cursor(+1, False)                
+        elif(key == 1073741904):
+            # left
+            if(sdlboy_input.is_key_down(1073742048)):
+                inputview.move_cursor(-1, True)
+            else:
+                inputview.move_cursor(-1, False)       
 
 def print_error(src, msg):
     err = src + " ERROR\t\t"
@@ -368,7 +470,7 @@ class InputHandler:
         if(dlog.enable.sys):
             self.print_spacer()
         gameboy.tick() 
-    def handle_input(self, user_input):
+    def handle_input(self, user_input):        
         dlog.print_msg("SYS", ">>> " + user_input)
         dlog.enable.errors();    
         print_perf = False
@@ -390,58 +492,78 @@ class InputHandler:
             if(user_input.endswith("perf")):
                 user_input = user_input.replace("perf", "").strip()
                 print_perf = True
-                suffix_found = True        
+                suffix_found = True       
+                
         if(user_input == "q"):
             sdlboy_window.glob.exit_requested = True
             return
-        if(user_input.startswith("st")):
+        elif(user_input.startswith("st")):
+            if(log_free):
+                dlog.enable.all()
             self.print_spacer()
             lcd.print_state()
             car.print_state()
             z80.print_state()
             self.print_spacer()
+                
             return
-        if(user_input.startswith("rb")):
+        elif(user_input.startswith("rb")):
+            if(log_free):
+                dlog.enable.all()
             split = user_input.split(" ")
             addr = int(split[1], 16)
             mem.read_byte(addr)
             self.print_spacer()
             return
-        if(user_input.startswith("rw")):
+        elif(user_input.startswith("rw")):
+            if(log_free):
+                dlog.enable.all()
             split = user_input.split(" ")
             addr = int(split[1], 16)
             mem.read_word(addr)
             self.print_spacer()
             return
-        if(user_input.startswith("wb")):
+        elif(user_input.startswith("wb")):
+            if(log_free):
+                dlog.enable.all()
             split = user_input.split(" ")
             addr = int(split[1], 16)
             byte = int(split[2], 16)
             mem.write_byte(addr, byte)
             self.print_spacer()
             return
-        if(user_input.startswith("ww")):
+        elif(user_input.startswith("ww")):
+            if(log_free):
+                dlog.enable.all()
             split = user_input.split(" ")
             addr = int(split[1], 16)
             word = int(split[2], 16)
             mem.write_word(addr, word)
             self.print_spacer()
             return
-        if(user_input.startswith("ime 0")):
+        elif(user_input.startswith("ime 0")):
+            if(log_free):
+                dlog.enable.all()
             z80.state.interrupt_master_enable = 0
             self.print_spacer()
             return
-        if(user_input.startswith("ime 1")):
+        elif(user_input.startswith("ime 1")):
+            if(log_free):
+                dlog.enable.all()
             z80.state.interrupt_master_enable = 1
             z80.state.interrupt_master_enable_skip_one_cycle = 1
             self.print_spacer()
             return
-        if(user_input.startswith("setif")):
+        elif(user_input.startswith("setif")):
+            if(log_free):
+                dlog.enable.all()
             n = int(user_input.replace("setif", ""))
             mem.write_byte(0xFF0F, mem.read_byte(0xFF0F)|(0x01 << n))
             self.print_spacer()
             return
-        if(user_input.startswith("setie")):
+        elif(user_input.startswith("setie")):
+            if(log_free):
+                dlog.enable.all()
             n = int(user_input.replace("setie", ""))
             mem.write_byte(0xFFFF, mem.read_byte(0xFFFF)|(0x01 << n))
             self.print_spacer()
@@ -451,6 +573,8 @@ class InputHandler:
         cpu_time_start = z80.state.time_passed
         
         if(user_input.startswith("t")):
+            if(log_free):
+                dlog.enable.errors()
             val = user_input.replace("t", "").strip()
             if(val.startswith("+")):
                 # loop for N seconds
@@ -464,6 +588,8 @@ class InputHandler:
                 while(z80.state.time_passed < target_time):
                     self.do_loop()
         elif(user_input.startswith("pc")):
+            if(log_free):
+                dlog.enable.errors()
             val = user_input.replace("pc", "").strip()
             if(val.startswith(">")):
                 # loop until z80_pc > target_pc
@@ -488,16 +614,18 @@ class InputHandler:
                 dlog.enable.all()
             self.do_loop()   
         elif(user_input.startswith("s")):
+            if(log_free):
+                dlog.enable.errors()
             user_input = user_input.replace("s", "")
             user_input = user_input.replace("+", "")
             steps = int(user_input)
             for i in range(0, steps):
                 self.do_loop()     
-        else:        
+        else:       
+            if(log_free): 
+                dlog.enable.all() 
             try:
                 steps = int(user_input)        
-                if(log_free): 
-                    dlog.enable.all()
                 for i in range(0, steps):
                     self.do_loop()              
             except:           

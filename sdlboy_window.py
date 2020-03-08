@@ -82,6 +82,7 @@ def main():
     # console
     sdlboy_console.init()
     sdlboy_console.open()
+    sdlboy_console.set_control(False)
             
     # trigger resize
     on_window_resize()
@@ -107,9 +108,10 @@ def main():
             glob.vblank_occured = False
             while(not glob.vblank_occured):
                 gameboy.tick()
+            lcd.render()
                     
         # render
-        sdl2.SDL_SetRenderDrawColor(glob.renderer, 0, 0, 0, 0xFF)
+        sdl2.SDL_SetRenderDrawColor(glob.renderer, 0x33, 0x33, 0x33, 0xFF)
         sdl2.SDL_RenderClear(glob.renderer)
         sdl2.SDL_UpdateTexture(
             glob.screen_texture, 

@@ -7,6 +7,7 @@ import hw_video as vid
 
 def init():
     car.load_gb_file("roms/Super Mario Land (JUE) (V1.1) [!].gb")
+    car.print_info()
     z80.init()
     car.init()
     lcd.init()
