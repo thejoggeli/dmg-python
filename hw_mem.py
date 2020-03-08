@@ -1,13 +1,32 @@
 import util_dlog as dlog
 import hw_cartridge as car
 
-read_map = [None]*0x10000
-write_map = [None]*0x10000
-name_map = [None]*0x10000
+read_map  = None
+write_map = None
+name_map  = None
+
+intram   = None
+iomem    = None
+zeropage = None
+
+bios_running = True
+bios = None
 
 def init():
+    # init maps
+    global read_map, write_map, name_map
+    read_map  = [None]*0x10000
+    write_map = [None]*0x10000
+    name_map  = [None]*0x10000
+    # init tables
+    global intram, iomem, zeropage
+    intram   = [0]*0x2000
+    iomem    = [0]*0x4C
+    zeropage = [0]*0x80
     # load bios
-    global bios
+    global bios, bios_running
+    bios_running = True
+    bios = None
     with open("bios.gb", "rb") as bios_fh:    
         bios = bytearray(bios_fh.read())
     # load memory functions
@@ -53,7 +72,6 @@ def init():
     name_map [0xFF0F] = lambda: "IF - Interrupt Flags (R/W)"
     
         
-bios_running = True
 def write_0xFF50(addr, byte):
     # end bios
     global bios_running, read_map, write_map
@@ -69,7 +87,6 @@ def write_0xFF0F(addr, byte):
     iomem[0x0F] = byte
 
 # bios
-bios = None
 def bios_read(addr):
     return bios[addr]
 def bios_write(addr, byte):
@@ -79,7 +96,6 @@ def bios_name():
     return "BIOS"
     
 # internal ram
-intram = [0]*0x2000
 def intram_read(addr):
     return intram[addr-0xC000]
 def intram_write(addr, byte):
@@ -108,7 +124,6 @@ def unused_name():
     return "Unused"
 
 # I/O ports
-iomem = [0]*0x4C
 def iomem_read(addr):
     if(dlog.enable.mem_warnings):
         dlog.print_warning("MEM", "iomem_read not implemented: " + "0x{0:0{1}X}".format(addr, 4))
@@ -121,7 +136,6 @@ def iomem_name():
     return "I/O ports: not implemented"
 
 # zero page
-zeropage = [0]*0x80
 def zeropage_read(addr):
     return zeropage[addr-0xFF80]
 def zeropage_write(addr, byte):

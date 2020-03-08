@@ -9,37 +9,39 @@ class Info:
     type = ""
     rom_size = 0
     ram_size = 0
-info = Info()
-
-class RomFile:
-    bytes = None
-rom_file = RomFile()    
 
 # function pointers for memory
-rom_0_read = None
+rom_0_read  = None
 rom_0_write = None
-rom_0_name = None
-rom_x_read = None
+rom_0_name  = None
+rom_x_read  = None
 rom_x_write = None
-rom_x_name = None
-ram_read = None
-ram_write = None
-ram_name = None
-mbc_state = None
+rom_x_name  = None
+ram_read    = None
+ram_write   = None
+ram_name    = None
+mbc_state   = None
+        
+def init():
+    pass
     
 def load_gb_file(file):
+    global info
+    info = Info()
+    
+    rom_file_bytes = None
     with open(file, "rb") as fh:    
-        rom_file.bytes = bytearray(fh.read())
+        rom_file_bytes = bytearray(fh.read())
     
     info.title = ""
     for i in range(0x0134, 0x0144):
-        info.title += str(chr(rom_file.bytes[i]))        
-    info.license = license_map[str(rom_file.bytes[0x0144]&0xF)+str(rom_file.bytes[0x0145]&0xF)]    
-    info.cgb = rom_file.bytes[0x0143]
-    info.sgb = rom_file.bytes[0x0146]    
-    info.type = carttype = carttype_map[rom_file.bytes[0x0147]]    
-    info.rom_size = rom_size_map[rom_file.bytes[0x0148]]
-    info.ram_size = ram_size_map[rom_file.bytes[0x0149]]
+        info.title += str(chr(rom_file_bytes[i]))        
+    info.license = license_map[str(rom_file_bytes[0x0144]&0xF)+str(rom_file_bytes[0x0145]&0xF)]    
+    info.cgb = rom_file_bytes[0x0143]
+    info.sgb = rom_file_bytes[0x0146]    
+    info.type = carttype = carttype_map[rom_file_bytes[0x0147]]    
+    info.rom_size = rom_size_map[rom_file_bytes[0x0148]]
+    info.ram_size = ram_size_map[rom_file_bytes[0x0149]]
    
     global rom_0_read, rom_0_write, rom_0_name
     global rom_x_read, rom_x_write, rom_x_name
@@ -64,14 +66,11 @@ def load_gb_file(file):
     for i in range(0, mbc_state.num_rom_banks):
         start = i*0x4000
         end = (i+1)*0x4000
-        mbc_state.rom_banks[i] = rom_file.bytes[start:end]
+        mbc_state.rom_banks[i] = rom_file_bytes[start:end]
     
     mbc_state.ram_banks = [None]*mbc_state.num_ram_banks
     for i in range(0, mbc_state.num_ram_banks):
         mbc_state.ram_banks[i] = [0]*0x2000
-        
-def init():
-    pass
     
 def map_memory():
     for i in range(0x0100, 0x4000):

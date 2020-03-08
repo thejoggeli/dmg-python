@@ -16,12 +16,8 @@ class Color:
         self.a = a
         self.c_rgba = (ctypes.c_uint)((r<<24)|(r<<16)|(r<<8)|a)
         
-color_map = [None]*4
-color_map[3] = Color(0x00, 0x00, 0x00)
-color_map[2] = Color(0x55, 0x55, 0x55)
-color_map[1] = Color(0xAA, 0xAA, 0xAA)
-color_map[0] = Color(0xFF, 0xFF, 0xFF)
-
+color_map    = None
+bg_color_map = None
 pixels = None
 
 class State:
@@ -33,6 +29,18 @@ class State:
 state = State()
 
 def init():
+
+    global state
+    state = State()
+    
+    global color_map, bg_color_map
+    color_map    = [None]*4
+    color_map[3] = Color(0x00, 0x00, 0x00)
+    color_map[2] = Color(0x55, 0x55, 0x55)
+    color_map[1] = Color(0xAA, 0xAA, 0xAA)
+    color_map[0] = Color(0xFF, 0xFF, 0xFF)
+    bg_color_map = [None]*4
+
     global pixels
     pixels_inital = [0x808080FF]*(256*256)
     pixels = ((ctypes.c_uint)*(256*256))(*pixels_inital)
@@ -102,14 +110,17 @@ def update():
             state.scanline_count -= 154
            #state.frame_count += 1
             state.frame_cycle_count -= 70224
+            # reset V-Blank
+            mem.write_byte(0xFF0F, mem.read_byte(0xFF0F)&0xFE)
+        elif(state.scanline_count >= 144):
+            # set V-Bank
+            mem.write_byte(0xFF0F, mem.read_byte(0xFF0F)|0x01)
         mem.write_byte(0xFF44, state.scanline_count)
         events.fire(events.EVENT_SCANLINE_CHANGE, (state.scanline_count))
         
     # TODO implement 0xFF40   
     # TODO implement 0xFF41 
     # TODO implement 0xFF45
-    
-bg_color_map = [None]*4
     
 def render():
 
@@ -152,7 +163,7 @@ def render():
                 
         # BG & Window Tile Data Select
         if(lcdc_4 == 0):
-            # 0x8000-0x8FFF with unsigned offset
+            # 0x8800-0x97FF with signed offset
             tile_x_index = 0
             pixel_index_offset = 0            
             for bg_tile_map_ptr in range(bg_tile_map_ptr_start, bg_tile_map_ptr_end):
@@ -160,7 +171,7 @@ def render():
                 bg_tile_data_ptr = vid.videoram[bg_tile_map_ptr]            
                 if(bg_tile_data_ptr > 127):
                     bg_tile_data_ptr -= 256
-                bg_tile_data_ptr = bg_tile_data_ptr*8 + 0x800  
+                bg_tile_data_ptr = bg_tile_data_ptr*16 + 0x1000
                 # draw tile
                 pixel_index = pixel_index_offset
                 for i in range(0, 8):          
@@ -258,14 +269,11 @@ def write_byte_0xFF45(addr, byte):
    
 # DMA - Transfer and Start Address
 def write_byte_0xFF46(addr, byte):
-    if(dlog.enable.mem_warnings):
-        dlog.print_warning("LCD", "write_0xFF46 not implemented")  
+    dlog.print_error("LCD", "write_0xFF46 not implemented")  
     mem.iomem[0x46] = byte 
     
 # BGP - BG & Window Palette Data (R/W)
 def write_byte_0xFF47(addr, byte):
-    if(dlog.enable.mem_warnings):
-        dlog.print_warning("LCD", "write_0xFF47 not implemented")  
     mem.iomem[0x47] = byte 
 
 # OBP0 - Object Palette 0 Data (R/W)

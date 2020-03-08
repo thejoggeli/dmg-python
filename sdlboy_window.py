@@ -26,7 +26,12 @@ class Glob:
     exit_requested = False
     vblank_occured = False
     in_console = False
+    cycle_limiter = 0
+    speed_estimate = 0
 glob = Glob()
+
+def reset():
+    gameboy.init()
 
 def main(): 
 
@@ -92,16 +97,25 @@ def main():
     # trigger resize
     on_window_resize()
         
-    # start main loop
+    # start main loop    
+    last_speed_estimate_cpu_time = 0
+    last_speed_estimate = 0
     sdlboy_time.start()
     glob.event = sdl2.SDL_Event()
+    lost_time = 0
+    
     while(not glob.exit_requested):
     
         frame_start_time = time.time()
         sdlboy_time.update()
-        sdlboy_input.clear_on_keys()
         
+        if(sdlboy_time.since_start - last_speed_estimate >= 1.0):            
+            glob.speed_estimate = (z80.state.time_passed-last_speed_estimate_cpu_time)
+            last_speed_estimate = sdlboy_time.since_start
+            last_speed_estimate_cpu_time = z80.state.time_passed
+            
         # poll events
+        sdlboy_input.clear_on_keys()
         poll_events()           
 
         # update console
@@ -110,9 +124,15 @@ def main():
             
         if(not sdlboy_console.has_control):
             # tick until vblank
-            glob.vblank_occured = False
-            while(not glob.vblank_occured):
-                gameboy.tick()
+            if(glob.cycle_limiter):
+                cycle_counter = 0
+                while(cycle_counter < glob.cycle_limiter):
+                    gameboy.tick()
+                    cycle_counter += z80.state.cycles_delta
+            else:                
+                glob.vblank_occured = False
+                while(not glob.vblank_occured):
+                    gameboy.tick()
             lcd.render()
                     
         # render
@@ -152,13 +172,16 @@ def main():
         
         # present
         sdl2.SDL_RenderPresent(glob.renderer)
-        
+                
         # sleep
         frame_time_passed =  time.time() - frame_start_time
-        sleep_duration = 1.0/60.0 - frame_time_passed
+        sleep_duration = 1.0/60.0 - frame_time_passed - lost_time
         if(sleep_duration > 0.0):
             sdl2.SDL_Delay(int(sleep_duration*1000.0))
+            lost_time = 0
             pass
+        else:
+            lost_time = -sleep_duration
     
     # shutdown
     sdl2.SDL_DestroyWindow(glob.window)

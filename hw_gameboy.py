@@ -6,8 +6,12 @@ import hw_cartridge as car
 import hw_video as vid
 
 def init():
-    car.load_gb_file("roms/Super Mario Land (JUE) (V1.1) [!].gb")
+   #car.load_gb_file("roms/Super Mario Land (JUE) (V1.1) [!].gb")
+    car.load_gb_file("roms/Donkey Kong Land 2 (USA, Europe) (SGB Enhanced).gb")
     car.print_info()
+    reset()
+    
+def reset():
     z80.init()
     car.init()
     lcd.init()

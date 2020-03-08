@@ -47,7 +47,15 @@ class Sideview:
         sdl2.SDL_SetRenderDrawColor(glob.renderer, 0, 0, 0, 127)
         sdl2.SDL_RenderFillRect(glob.renderer, self.viewport)         
         self.monitor_ptr = 0        
-        self.monitor("FPS:" + str(sdlboy_time.fps))        
+        self.monitor("FPS:" + str(sdlboy_time.fps))
+        speed_estimate = "{0:.1f}".format(round(sdlboy_window.glob.speed_estimate*100))  
+        self.monitor("Speed:" + speed_estimate + "%")         
+        limiter = str(sdlboy_window.glob.cycle_limiter)
+        if(limiter):
+            self.monitor("Limiter:" + str(limiter))    
+        else:
+            self.monitor("Limiter:off")
+            
         self.monitor("Control:" + str(has_control))
         self.monitor("T(Z80):" + "{0:.1f}".format(round(z80.state.time_passed, 1)))
         self.monitor("T(IRL):" + "{0:.1f}".format(round(sdlboy_time.since_start, 1)))
@@ -342,6 +350,7 @@ def init():
     sideview = Sideview()
     textview = Textview()
     inputview = Inputview()
+    input_handler.print_spacer()
    #dlog.print_error = print_error
    #dlog.print_warning = print_warning
    #dlog.print_msg = print_msg
@@ -351,7 +360,6 @@ def open():
     sdl2.SDL_SetRenderDrawBlendMode(glob.renderer, sdl2.SDL_BLENDMODE_BLEND)
     sdl2.SDL_StartTextInput();
     is_open = True
-    set_control(True)
     resize()
     dlog.enable.errors()
 def close():
@@ -498,6 +506,20 @@ class InputHandler:
         if(user_input == "q"):
             sdlboy_window.glob.exit_requested = True
             return
+        elif(user_input.startswith("reset")):
+            sdlboy_window.reset()
+            return
+        elif(user_input.startswith("limit")):
+            val = user_input.replace("limit", "")
+            sdlboy_window.glob.cycle_limiter = int(val)            
+            return
+        elif(user_input.startswith("speed")):
+            ratio = float(user_input.replace("speed", ""))
+            if(ratio == 1):
+                sdlboy_window.glob.cycle_limiter = 0
+            else:
+                sdlboy_window.glob.cycle_limiter = int(70224.0*ratio)
+            return
         elif(user_input.startswith("st")):
             if(log_free):
                 dlog.enable.all()
@@ -506,7 +528,6 @@ class InputHandler:
             car.print_state()
             z80.print_state()
             self.print_spacer()
-                
             return
         elif(user_input.startswith("rb")):
             if(log_free):
