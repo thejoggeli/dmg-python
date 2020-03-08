@@ -88,7 +88,7 @@ def main():
         
     # start main loop
     sdlboy_time.start()
-    event = sdl2.SDL_Event()
+    glob.event = sdl2.SDL_Event()
     while(not glob.exit_requested):
     
         frame_start_time = time.time()
@@ -96,28 +96,7 @@ def main():
         sdlboy_input.clear_on_keys()
         
         # poll events
-        while sdl2.SDL_PollEvent(ctypes.byref(event)) != 0:
-            if(event.type == sdl2.SDL_KEYDOWN):
-                sdlboy_input.handle_key_down(event)
-                # toggle console
-                if(event.key.keysym.sym == 1073741882):
-                    if(sdlboy_console.is_open):
-                        sdlboy_console.close()
-                    else:
-                        sdlboy_console.open()                        
-            elif(event.type == sdl2.SDL_KEYUP):
-                sdlboy_input.handle_key_up(event)
-            elif event.type == sdl2.SDL_QUIT:
-                glob.exit_requested = True
-            elif event.type == sdl2.SDL_WINDOWEVENT:
-                if(
-                    event.window.event == sdl2.SDL_WINDOWEVENT_RESIZED or
-                    event.window.event == sdl2.SDL_WINDOWEVENT_MOVED      
-                ):
-                    on_window_resize()
-            # let console handle events
-            if(sdlboy_console.is_open):
-                sdlboy_console.handle_event(event)                
+        poll_events()           
 
         # update console
         if(sdlboy_console.is_open):
@@ -175,6 +154,31 @@ def main():
     sdl2.SDL_DestroyWindow(glob.window)
     sdl2.SDL_Quit()   
     return 0
+    
+def poll_events():
+    event = glob.event
+    while sdl2.SDL_PollEvent(ctypes.byref(event)) != 0:
+        if(event.type == sdl2.SDL_KEYDOWN):
+            sdlboy_input.handle_key_down(event)
+            # toggle console
+            if(event.key.keysym.sym == 1073741882):
+                if(sdlboy_console.is_open):
+                    sdlboy_console.close()
+                else:
+                    sdlboy_console.open()                        
+        elif(event.type == sdl2.SDL_KEYUP):
+            sdlboy_input.handle_key_up(event)
+        elif event.type == sdl2.SDL_QUIT:
+            glob.exit_requested = True
+        elif event.type == sdl2.SDL_WINDOWEVENT:
+            if(
+                event.window.event == sdl2.SDL_WINDOWEVENT_RESIZED or
+                event.window.event == sdl2.SDL_WINDOWEVENT_MOVED      
+            ):
+                on_window_resize()
+        # let console handle events
+        if(sdlboy_console.is_open):
+            sdlboy_console.handle_event(event) 
     
 def on_window_resize():
     w = ctypes.c_int()

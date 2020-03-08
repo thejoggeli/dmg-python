@@ -21,41 +21,101 @@ class Glob:
 glob = Glob()
 
 class Sideview:
-    debug_texts = None
     viewport = None
     font = None
+    monitor_ptr = 0
+    monitor_texts = []
     def __init__(self):    
         self.viewport = sdl2.SDL_Rect(0, 0, 0, 0)
-        self.debug_texts = [None]*10
         self.font = sdlboy_text.get_font("console")
-        for i in range(0, len(self.debug_texts)):
-            self.debug_texts[i] = sdlboy_text.Text(
-                font=self.font,
-                value="---", 
-                buffer_size=16
-            )
-            self.debug_texts[i].set_position(4, 4+i*(self.font.char_height+4))    
-            self.debug_texts[i].set_scale(1)
+    def monitor_grow(self):
+        text = sdlboy_text.Text(
+            font=self.font,
+            value="---", 
+            buffer_size=16
+        )
+        text.set_position(4, 4+len(self.monitor_texts)*(self.font.char_height+4))    
+        text.set_scale(1)
+        self.monitor_texts.append(text)
+    def monitor(self, str):
+        if(self.monitor_ptr >= len(self.monitor_texts)):
+            self.monitor_grow()
+        self.monitor_texts[self.monitor_ptr].value = str
+        self.monitor_texts[self.monitor_ptr].update()
+        self.monitor_ptr += 1
     def render(self):                
         sdl2.SDL_SetRenderDrawColor(glob.renderer, 0, 0, 0, 127)
-        sdl2.SDL_RenderFillRect(glob.renderer, self.viewport)            
-        self.debug_texts[0].value = "FPS:" + str(sdlboy_time.fps)
-        self.debug_texts[1].value = "T(Z80):" + "{0:.1f}".format(round(z80.state.time_passed, 1))
-        self.debug_texts[2].value = "T(IRL):" + "{0:.1f}".format(round(sdlboy_time.since_start, 1))
-        self.debug_texts[3].value = "PC:" + "0x{0:0{1}X}".format(z80.reg.pc, 4)
-        self.debug_texts[4].value = "SP:" + "0x{0:0{1}X}".format(z80.reg.sp, 4)
-        self.debug_texts[5].value = "AF:" + "0x{0:0{1}X}".format(z80.reg.get_af(), 4)
-        self.debug_texts[6].value = "BC:" + "0x{0:0{1}X}".format(z80.reg.get_bc(), 4)
-        self.debug_texts[7].value = "DE:" + "0x{0:0{1}X}".format(z80.reg.get_de(), 4)
-        self.debug_texts[8].value = "HL:" + "0x{0:0{1}X}".format(z80.reg.get_hl(), 4)                 
-        self.debug_texts[9].value = "Control:" + str(has_control)
-        for i in range(0, len(self.debug_texts)):
-            self.debug_texts[i].update()
-            self.debug_texts[i].render()
+        sdl2.SDL_RenderFillRect(glob.renderer, self.viewport)         
+        self.monitor_ptr = 0        
+        self.monitor("FPS:" + str(sdlboy_time.fps))        
+        self.monitor("Control:" + str(has_control))
+        self.monitor("T(Z80):" + "{0:.1f}".format(round(z80.state.time_passed, 1)))
+        self.monitor("T(IRL):" + "{0:.1f}".format(round(sdlboy_time.since_start, 1)))
+        
+        # Z80
+        self.monitor("BIOS:" + str(bool(mem.bios_running)))
+        self.monitor("")
+        self.monitor("======Z80======")
+        znhc = 0
+        znhc |= z80.reg.get_flag_z()<<3
+        znhc |= z80.reg.get_flag_n()<<2
+        znhc |= z80.reg.get_flag_h()<<1
+        znhc |= z80.reg.get_flag_c()<<0
+        ime = z80.state.interrupt_master_enable
+        ie_byte = mem.read_byte_silent(0xFFFF)
+        if_byte = mem.read_byte_silent(0xFF0F)
+        self.monitor("  PC:" + "0x{0:0{1}X}".format(z80.reg.pc, 4))
+        self.monitor("  SP:" + "0x{0:0{1}X}".format(z80.reg.sp, 4))
+        self.monitor("ZNHC:" + "{0:0{1}b}".format(znhc,4))
+        self.monitor("  AF:" + "0x{0:0{1}X}".format(z80.reg.get_af(), 4))
+        self.monitor("  BC:" + "0x{0:0{1}X}".format(z80.reg.get_bc(), 4))
+        self.monitor("  DE:" + "0x{0:0{1}X}".format(z80.reg.get_de(), 4))
+        self.monitor("  HL:" + "0x{0:0{1}X}".format(z80.reg.get_hl(), 4)) 
+        self.monitor(" IME:" + str(bool(ime)))
+        self.monitor("  IE:" + "%{0:0{1}b}".format(ie_byte,5))
+        self.monitor("  IF:" + "%{0:0{1}b}".format(if_byte,5))
+        self.monitor("HALT:" + str(bool(z80.state.halted)))
+        self.monitor("STOP:" + str(bool(z80.state.stopped)))
+        
+        # Cartridge
+        self.monitor("")
+        self.monitor("===CARTRIDGE===")
+        self.monitor("ROM#:" + "0x{0:0{1}X}".format(car.mbc_state.rom_bank_selected, 2))
+        self.monitor("RAM#:" + "0x{0:0{1}X}".format(car.mbc_state.ram_bank_selected, 2))
+        lcdc = mem.read_byte_silent(0xFF40)
+        stat = mem.read_byte_silent(0xFF41)
+        scy  = mem.read_byte_silent(0xFF42)
+        scx  = mem.read_byte_silent(0xFF43)
+        ly   = mem.read_byte_silent(0xFF44)
+        lyc  = mem.read_byte_silent(0xFF45)
+        dma  = mem.read_byte_silent(0xFF46)
+        bgp  = mem.read_byte_silent(0xFF47)
+        obp0 = mem.read_byte_silent(0xFF48)
+        obp1 = mem.read_byte_silent(0xFF49)
+        wx   = mem.read_byte_silent(0xFF4B)
+        wy   = mem.read_byte_silent(0xFF4A)
+        
+        # LCD
+        self.monitor("")
+        self.monitor("======LCD======")
+        self.monitor("LCDC:" + "%{0:0{1}b}".format(lcdc, 8))
+        self.monitor("STAT:" + "%{0:0{1}b}".format(stat, 8))
+        self.monitor(" SCY:" + "{0:0{1}d}".format(scy, 3))
+        self.monitor(" SCX:" + "{0:0{1}d}".format(scx, 3))
+        self.monitor("  LY:" + "{0:0{1}d}".format(ly, 3))
+        self.monitor(" LYC:" + "{0:0{1}d}".format(lyc, 3))
+        self.monitor(" DMA:" + "0x{0:0{1}X}".format(dma, 2))
+        self.monitor(" BGP:" + "%{0:0{1}b}".format(bgp, 8))
+        self.monitor("OBP0:" + "%{0:0{1}b}".format(obp0, 8))
+        self.monitor("OBP1:" + "%{0:0{1}b}".format(obp1, 8))
+        self.monitor("  WY:" + "{0:0{1}d}".format(wy, 3))
+        self.monitor("  WX:" + "{0:0{1}d}".format(wx, 3))
+        for i in range(0, len(self.monitor_texts)):
+            self.monitor_texts[i].render()
     def resize(self):
         self.viewport.x = 0
         self.viewport.y = 0
-        self.viewport.w = 200
+        self.viewport.w = 220
         self.viewport.h = int(sdlboy_window.glob.window_rect.h)
     
 class Textview:
@@ -166,9 +226,10 @@ class Inputview:
         self.text.update()
         if(has_control):
             try:
-                handle_input(user_input)
-            except:
-                dlog.print_msg("SYS", "invalid input")
+                input_handler.handle_input(user_input)
+            except Exception as e:
+                dlog.print_msg("SYS", str(e))
+                textview.print_line(str(e))
 
 class Line:
     text = None
@@ -300,150 +361,168 @@ def replace_tab(s, tabstop = 4):
             result += c    
     return result
     
-def print_spacer():
-    dlog.print_msg("SYS", "=======================================================================================")
-
-def do_loop():
-    if(dlog.enable.sys):
-        print_spacer()
-    gameboy.tick()
-
-def handle_input(user_input):
-    dlog.print_msg("SYS", ">>> " + user_input)
-    dlog.enable.all();    
-    printPerformance = False
-    suffixFound = True
-    while(suffixFound):
-        suffixFound = False
-        user_input = user_input.strip()
-        if(user_input.endswith("--")):
-            user_input = user_input.replace("--", "").strip()
-            dlog.enable.errors()
-            suffixFound = True
-        if(user_input.endswith("-")):
-            user_input = user_input.replace("-", "").strip()
-            dlog.enable.warnings()
-            suffixFound = True
-        if(user_input.endswith("perf")):
-            user_input = user_input.replace("perf", "").strip()
-            printPerformance = True
-            suffixFound = True
-    
-    if(user_input == "q"):
-        quit = True
-        return
-    if(user_input.startswith("st")):
-        print_spacer()
-        lcd.print_state()
-        car.print_state()
-        z80.print_state()
-        print_spacer()
-        return
-    if(user_input.startswith("rb")):
-        split = user_input.split(" ")
-        addr = int(split[1], 16)
-        mem.read_byte(addr)
-        print_spacer()
-        return
-    if(user_input.startswith("rw")):
-        split = user_input.split(" ")
-        addr = int(split[1], 16)
-        mem.read_word(addr)
-        print_spacer()
-        return
-    if(user_input.startswith("wb")):
-        split = user_input.split(" ")
-        addr = int(split[1], 16)
-        byte = int(split[2], 16)
-        mem.write_byte(addr, byte)
-        print_spacer()
-        return
-    if(user_input.startswith("ww")):
-        split = user_input.split(" ")
-        addr = int(split[1], 16)
-        word = int(split[2], 16)
-        mem.write_word(addr, word)
-        print_spacer()
-        return
-    if(user_input.startswith("ime 0")):
-        z80.state.interrupt_master_enable = 0
-        print_spacer()
-        return
-    if(user_input.startswith("ime 1")):
-        z80.state.interrupt_master_enable = 1
-        z80.state.interrupt_master_enable_skip_one_cycle = 1
-        print_spacer()
-        return
-    if(user_input.startswith("setif")):
-        n = int(user_input.replace("setif", ""))
-        mem.write_byte(0xFF0F, mem.read_byte(0xFF0F)|(0x01 << n))
-        print_spacer()
-        return
-    if(user_input.startswith("setie")):
-        n = int(user_input.replace("setie", ""))
-        mem.write_byte(0xFFFF, mem.read_byte(0xFFFF)|(0x01 << n))
-        print_spacer()
-        return
+class InputHandler:
+    def print_spacer(self):
+        dlog.print_msg("SYS", "=======================================================================================")
+    def do_loop(self):
+        if(dlog.enable.sys):
+            self.print_spacer()
+        gameboy.tick() 
+    def handle_input(self, user_input):
+        dlog.print_msg("SYS", ">>> " + user_input)
+        dlog.enable.errors();    
+        print_perf = False
+        suffix_found = True
+        log_free = True
+        while(suffix_found):
+            suffix_found = False
+            user_input = user_input.strip()
+            if(user_input.endswith("all")):
+                user_input = user_input.replace("all", "").strip()
+                dlog.enable.all()
+                log_free = False
+                suffix_found = True
+            if(user_input.endswith("war")):
+                user_input = user_input.replace("war", "").strip()
+                dlog.enable.warnings()
+                log_free = False
+                suffix_found = True
+            if(user_input.endswith("perf")):
+                user_input = user_input.replace("perf", "").strip()
+                print_perf = True
+                suffix_found = True        
+        if(user_input == "q"):
+            sdlboy_window.glob.exit_requested = True
+            return
+        if(user_input.startswith("st")):
+            self.print_spacer()
+            lcd.print_state()
+            car.print_state()
+            z80.print_state()
+            self.print_spacer()
+            return
+        if(user_input.startswith("rb")):
+            split = user_input.split(" ")
+            addr = int(split[1], 16)
+            mem.read_byte(addr)
+            self.print_spacer()
+            return
+        if(user_input.startswith("rw")):
+            split = user_input.split(" ")
+            addr = int(split[1], 16)
+            mem.read_word(addr)
+            self.print_spacer()
+            return
+        if(user_input.startswith("wb")):
+            split = user_input.split(" ")
+            addr = int(split[1], 16)
+            byte = int(split[2], 16)
+            mem.write_byte(addr, byte)
+            self.print_spacer()
+            return
+        if(user_input.startswith("ww")):
+            split = user_input.split(" ")
+            addr = int(split[1], 16)
+            word = int(split[2], 16)
+            mem.write_word(addr, word)
+            self.print_spacer()
+            return
+        if(user_input.startswith("ime 0")):
+            z80.state.interrupt_master_enable = 0
+            self.print_spacer()
+            return
+        if(user_input.startswith("ime 1")):
+            z80.state.interrupt_master_enable = 1
+            z80.state.interrupt_master_enable_skip_one_cycle = 1
+            self.print_spacer()
+            return
+        if(user_input.startswith("setif")):
+            n = int(user_input.replace("setif", ""))
+            mem.write_byte(0xFF0F, mem.read_byte(0xFF0F)|(0x01 << n))
+            self.print_spacer()
+            return
+        if(user_input.startswith("setie")):
+            n = int(user_input.replace("setie", ""))
+            mem.write_byte(0xFFFF, mem.read_byte(0xFFFF)|(0x01 << n))
+            self.print_spacer()
+            return
+            
+        real_time_start = time.time()
+        cpu_time_start = z80.state.time_passed
         
-    real_time_start = time.time()
-    cpu_time_start = z80.state.time_passed
-    
-    if(user_input.startswith("t")):
-        val = user_input.replace("t", "").strip()
-        if(val.startswith("+")):
-            # loop for N seconds
-            target_time = float(val.replace("+", "").strip())
-            target_time += z80.state.time_passed
-            while(z80.state.time_passed < target_time):
-                do_loop()             
-        else:
-            # loop until cpu time = N seconds
-            target_time = float(val.replace("=", "").strip())
-            while(z80.state.time_passed < target_time):
-                do_loop()
-    elif(user_input.startswith("pc")):
-        val = user_input.replace("pc", "").strip()
-        if(val.startswith(">")):
-            # loop until z80_pc > target_pc
-            target_pc = int(val.replace(">", ""), 16)
-            while(z80.reg.pc <= target_pc):
-                do_loop()
-        elif(val.startswith("<")):
-            # loop until z80_pc < target_pc
-            target_pc = int(val.replace("<", ""), 16)
-            while(z80.reg.pc >= target_pc):
-                do_loop()
-        else:
-            # loop until z80_pc = target_pc            
-            target_pc = int(val.replace("=", ""), 16)
-            while(z80.reg.pc != target_pc):
-                do_loop()    
-        dlog.print_msg("SYS", "PC is now at " + "0x{0:0{1}X}".format(z80.reg.pc, 4))
-    else:
-        # loop for n steps
-        steps = 1
-        try:
+        if(user_input.startswith("t")):
+            val = user_input.replace("t", "").strip()
+            if(val.startswith("+")):
+                # loop for N seconds
+                target_time = float(val.replace("+", "").strip())
+                target_time += z80.state.time_passed
+                while(z80.state.time_passed < target_time):
+                    self.do_loop()             
+            else:
+                # loop until cpu time = N seconds
+                target_time = float(val.replace("=", "").strip())
+                while(z80.state.time_passed < target_time):
+                    self.do_loop()
+        elif(user_input.startswith("pc")):
+            val = user_input.replace("pc", "").strip()
+            if(val.startswith(">")):
+                # loop until z80_pc > target_pc
+                target_pc = int(val.replace(">", ""), 16)
+                while(z80.reg.pc <= target_pc):
+                    self.do_loop()
+            elif(val.startswith("<")):
+                # loop until z80_pc < target_pc
+                target_pc = int(val.replace("<", ""), 16)
+                while(z80.reg.pc >= target_pc):
+                    self.do_loop()
+            elif(val.startswith("=")):
+                # loop until z80_pc = target_pc            
+                target_pc = int(val.replace("=", ""), 16)
+                while(z80.reg.pc != target_pc):
+                    self.do_loop()   
+            else:
+                raise ValueError("invalid input")
+            dlog.print_msg("SYS", "PC is now at " + "0x{0:0{1}X}".format(z80.reg.pc, 4))
+        elif(user_input.strip() == ""):
+            if(log_free):
+                dlog.enable.all()
+            self.do_loop()   
+        elif(user_input.startswith("s")):
+            user_input = user_input.replace("s", "")
+            user_input = user_input.replace("+", "")
             steps = int(user_input)
-        except:
-            steps = 1
-        for i in range(0, steps):
-            do_loop()
-    real_time_passed = time.time() - real_time_start
-    print_spacer()
-    if(real_time_passed > 1 or printPerformance):
-         # print performance            
-        cpu_time_passed = z80.state.time_passed - cpu_time_start
-        time_str = "{0:.3f}".format(round(real_time_passed, 3))
-        cpu_time_str = "{0:.3f}".format(round(cpu_time_passed, 3))    
-        time_ratio = -1
-        if(real_time_passed != 0):
-            time_ratio = cpu_time_passed/real_time_passed
-        dlog.print_msg(
-            "SYS",
-            ">>> Perform:" + "\t" +
-            "CPU=" + cpu_time_str + "s\t" + 
-            "Real=" + time_str + "s\t"
-            "Ratio=" + str(round(time_ratio,3))
-        )
+            for i in range(0, steps):
+                self.do_loop()     
+        else:        
+            try:
+                steps = int(user_input)        
+                if(log_free): 
+                    dlog.enable.all()
+                for i in range(0, steps):
+                    self.do_loop()              
+            except:           
+                raise ValueError("invalid input")
+        real_time_passed = time.time() - real_time_start
+        self.print_spacer()
+        if(real_time_passed > 1 or print_perf):
+             # print performance            
+            cpu_time_passed = z80.state.time_passed - cpu_time_start
+            time_str = "{0:.3f}".format(round(real_time_passed, 3))
+            cpu_time_str = "{0:.3f}".format(round(cpu_time_passed, 3))    
+            time_ratio = -1
+            if(real_time_passed != 0):
+                time_ratio = cpu_time_passed/real_time_passed
+            dlog.print_msg(
+                "SYS",
+                ">>> Perform:" + "\t" +
+                "CPU=" + cpu_time_str + "s\t" + 
+                "Real=" + time_str + "s\t"
+                "Ratio=" + str(round(time_ratio,3))
+            )
+input_handler = InputHandler()
+
+
     
+
+
     
