@@ -57,23 +57,29 @@ def init():
     pass
 
 
-def print_error_console(src, msg):
-    err = "[ "+src+" ]" + "\tERROR\t\t"
+def print_error_console(src, msg, cat="ERROR"):
+    err = "["+src+"] "
+    err += "ERROR".ljust(14)
     err += "PC=" + "0x{0:0{1}X}".format(z80.state.instruction_location, 4) + "\t"
    #err += "Step=" + str(z80.state.step_nr) + " / "
     err += msg
     print(err)
     sys.exit()
 
-def print_warning_console(src, msg):
-    war = "[ "+src+" ]" + "\tWARNING! \t"
+def print_warning_console(src, msg, cat="WARNING"):
+    war = "["+src+"] "
+    war += "WARNING".ljust(14)
     war += "PC=" + "0x{0:0{1}X}".format(z80.state.instruction_location, 4) + "\t"
    #war += "Step=" + str(z80.state.step_nr) + " / "
     war += msg
     print(war)
     
-def print_msg_console(src, msg):
-    print("[ "+src+" ]" + "\t" + msg)
+def print_msg_console(src, msg, cat=None):
+    txt = "["+src+"] "
+    if(cat):
+        txt += cat.ljust(14)
+    txt += msg
+    print(txt)
 
 print_error = print_error_console
 print_warning = print_warning_console

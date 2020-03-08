@@ -11,6 +11,7 @@ import hw_cartridge as car
 import hw_video as vid
 import hw_gameboy as gameboy
 import util_dlog as dlog
+import util_config as config
 
 is_open = False
 has_control = False
@@ -104,9 +105,6 @@ class Textview:
             self.line_ptr = self.num_lines-1
         self.lines[self.line_ptr].text.value = msg
         self.lines[self.line_ptr].text.update()
-        if(len(msg) > 4):
-            inputview.prev_messages.append(msg)
-            inputview.prev_messages_ptr = len(inputview.prev_messages)-1
         
 
 class Inputview:
@@ -117,6 +115,7 @@ class Inputview:
     cursor_rect = None
     prev_messages = []
     prev_messages_ptr = -1
+    prev_messages_max = 32
     def __init__(self):
         self.font = sdlboy_text.get_font("console")   
         self.text = sdlboy_text.Text(
@@ -127,6 +126,10 @@ class Inputview:
         self.text.update()
         self.viewport = sdl2.SDL_Rect(0, 0, 0, 0) 
         self.cursor_rect = sdl2.SDL_Rect(0, 0, 0, 0) 
+        saved_history = config.get("sdlboy_console_history", False)
+        if(saved_history):
+            self.prev_messages = saved_history
+            self.prev_messages_ptr = len(self.prev_messages)-1
     def render(self):
         self.text.set_position(self.viewport.x, self.viewport.y + textview.line_offset)
         self.text.update()
@@ -146,6 +149,26 @@ class Inputview:
         self.viewport.y = sdlboy_window.glob.window_rect.h - textview.line_height-4
         self.viewport.w = sdlboy_window.glob.window_rect.w - sideview.viewport.w
         self.viewport.h = sdlboy_window.glob.window_rect.h - self.viewport.y    
+    def on_enter(self):
+        user_input = self.text.value[4:].strip()
+        textview.print_line(self.text.value.strip())
+        if(len(self.text.value.strip()) > 4):
+            self.prev_messages.append(self.text.value.strip())
+            self.prev_messages_ptr = len(self.prev_messages)-1
+            if(len(self.prev_messages) > self.prev_messages_max):
+                start = len(self.prev_messages)-self.prev_messages_max
+                end   = len(self.prev_messages)
+                self.prev_messages = self.prev_messages[start:end]
+                self.prev_messages_ptr = self.prev_messages_max-1              
+            config.set("sdlboy_console_history", self.prev_messages)
+            config.save()
+        self.text.value = ">>> "
+        self.text.update()
+        if(has_control):
+            try:
+                handle_input(user_input)
+            except:
+                dlog.print_msg("SYS", "invalid input")
 
 class Line:
     text = None
@@ -216,12 +239,7 @@ def handle_event(event):
             inputview.text.update()
         elif(key == 13):
             # Enter
-            user_input = inputview.text.value[4:].strip()
-            textview.print_line(inputview.text.value.strip())
-            inputview.text.value = ">>> "
-            inputview.text.update()
-            if(has_control):
-                handle_input(user_input)
+            inputview.on_enter()
         elif(key == 99 and sdlboy_input.is_key_down(1073742048)):
             # CTRL-C
             inputview.text.value = ">>> "
@@ -283,7 +301,7 @@ def replace_tab(s, tabstop = 4):
     return result
     
 def print_spacer():
-    dlog.print_msg("SYS", "=============================================================================")
+    dlog.print_msg("SYS", "=======================================================================================")
 
 def do_loop():
     if(dlog.enable.sys):
@@ -400,7 +418,7 @@ def handle_input(user_input):
             target_pc = int(val.replace("=", ""), 16)
             while(z80.reg.pc != target_pc):
                 do_loop()    
-        print("SYS  PC is now at " + "0x{0:0{1}X}".format(z80.reg.pc, 4))
+        dlog.print_msg("SYS", "PC is now at " + "0x{0:0{1}X}".format(z80.reg.pc, 4))
     else:
         # loop for n steps
         steps = 1
@@ -420,7 +438,8 @@ def handle_input(user_input):
         time_ratio = -1
         if(real_time_passed != 0):
             time_ratio = cpu_time_passed/real_time_passed
-        print(
+        dlog.print_msg(
+            "SYS",
             ">>> Perform:" + "\t" +
             "CPU=" + cpu_time_str + "s\t" + 
             "Real=" + time_str + "s\t"

@@ -140,10 +140,10 @@ def read_byte(addr):
         byte = read_map[addr](addr)        
         dlog.print_msg(
             "MEM",
-            "read_byte" + "\t" + 
             "0x{0:0{1}X}".format(addr, 4) + "\t" +
             "0x{0:0{1}X}".format(byte, 2) + "\t" +
-            name_map[addr]()
+            name_map[addr](),
+            cat="read_byte"
         )
         return byte
     return read_map[addr](addr)
@@ -151,11 +151,11 @@ def read_byte(addr):
 def write_byte(addr, byte):
     if(dlog.enable.mem_write):        
         dlog.print_msg(
-            "MEM",
-            "writ_byte" + "\t" + 
+            "MEM", 
             "0x{0:0{1}X}".format(addr, 4) + "\t" +
             "0x{0:0{1}X}".format(byte, 2) + "\t" +
-            name_map[addr]()
+            name_map[addr](),
+            cat="writ_byte"
         )
     write_map[addr](addr, byte)
     

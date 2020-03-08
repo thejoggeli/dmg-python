@@ -271,31 +271,31 @@ def update():
                     # vertical blank             
                     mem.write_byte(0xFF0F, if_flags&0x1E) # reset bit 0
                     if(dlog.enable.z80):
-                        dlog.print_msg("Z80", "interrupt" + "\t" + "vertical blank") 
+                        dlog.print_msg("Z80", "vertical blank", cat="interrupt") 
                     reg.pc = 0x0040
                 elif(masked&0x02):
                     # LCD STAT
                     mem.write_byte(0xFF0F, if_flags&0x1D) # reset bit 1
                     if(dlog.enable.z80):
-                        dlog.print_msg("Z80", "interrupt" + "\t" + "LCD STAT")
+                        dlog.print_msg("Z80", "LCD STAT", cat="interrupt")
                     reg.pc = 0x0048
                 elif(masked&0x04):
                     # timer
                     mem.write_byte(0xFF0F, if_flags&0x1B) # reset bit 2
                     if(dlog.enable.z80):
-                        dlog.print_msg("Z80", "interrupt" + "\t" + "timer")
+                        dlog.print_msg("Z80", "timer", cat="interrupt")
                     reg.pc = 0x0050
                 elif(masked&0x08):
                     # timer
                     mem.write_byte(0xFF0F, if_flags&0x17) # reset bit 3
                     if(dlog.enable.z80):
-                        dlog.print_msg("Z80", "interrupt" + "\t" + "serial")
+                        dlog.print_msg("Z80", "serial", cat="interrupt")
                     reg.pc = 0x0058
                 else:  
                     # joypad
                     mem.write_byte(0xFF0F, if_flags&0x0F) # reset bit 4
                     if(dlog.enable.z80):
-                        dlog.print_msg("Z80", "interrupt" + "\t" + "joypad")
+                        dlog.print_msg("Z80", "joypad", cat="interrupt")
                     reg.pc = 0x0060
                 execute_opcode = False
                 state.cycles_delta = interrupt_cycles
@@ -347,29 +347,32 @@ def update():
     state.time_passed += state.cycles_delta * CYCLE_DURATION
     
 def print_state():
+    ie_byte = mem.read_byte_silent(0xFFFF)
+    if_byte = mem.read_byte_silent(0xFF0F)
     dlog.print_msg(
-        "Z80", 
-        "interrupt" + "\t" + 
+        "Z80",         
         "IME=" + 
         str(state.interrupt_master_enable) + "/" + 
-        str(state.interrupt_master_enable_skip_one_cycle) + "\t\t" + 
-        "IE=" + "{0:0{1}b}".format(mem.read_byte_silent(0xFFFF),5) + "\t" +
-        "IF=" + "{0:0{1}b}".format(mem.read_byte_silent(0xFF0F),5)
+        str(state.interrupt_master_enable_skip_one_cycle) + "\t" + 
+        "IE=" + "{0:0{1}b}".format((ie_byte>>4)&0xF,4) + "_"  +
+                "{0:0{1}b}".format((ie_byte>>0)&0xF,4) + "\t" + 
+        "IF=" + "{0:0{1}b}".format((if_byte>>4)&0xF,4) + "_"  +
+                "{0:0{1}b}".format((if_byte>>0)&0xF,4) + "\t",
+        cat="interrupt"
     )
     dlog.print_msg(
         "Z80",
-        "registers\t"
         "PC=" + "0x{0:0{1}X}".format(reg.pc, 4) + "\t" +
         "B="  + "0x{0:0{1}X}".format(reg.b, 2) + "\t" +
         "D="  + "0x{0:0{1}X}".format(reg.d, 2) + "\t" +
         "H="  + "0x{0:0{1}X}".format(reg.h, 2) + "\t" +
         "A="  + "0x{0:0{1}X}".format(reg.a, 2) + "\t" +
         "Z N H C" + "\t"
-        "Time".rjust(12, " ")
+        "Time".rjust(12, " "),
+        cat="registers"
     )
     dlog.print_msg(
         "Z80",
-        "registers\t" +
         "SP=" + "0x{0:0{1}X}".format(reg.sp, 4) + "\t" +
         "C="  + "0x{0:0{1}X}".format(reg.c, 2) + "\t" +
         "E="  + "0x{0:0{1}X}".format(reg.e, 2) + "\t" +
@@ -379,21 +382,22 @@ def print_state():
         str(reg.get_flag_n()) + " " +
         str(reg.get_flag_h()) + " " +
         str(reg.get_flag_c()) + "\t" + 
-        "{0:.3f}".format(round(state.time_passed, 3),3).rjust(12, " ")
+        "{0:.3f}".format(round(state.time_passed, 3),3).rjust(12, " "),
+        cat="registers"
     )
     
 def print_endst():
     dlog.print_msg(
         "Z80",
-        "z80_endst" + "\t" +        
-        "Cycles="+str(state.cycles_delta)
+        "Cycles="+str(state.cycles_delta),
+        cat="z80_endst"
     )
     
 def print_op():    
     info = op.get_opcode_info(op.prefix, op.code)
     size = info[OPCODE_INFO_SIZE]
     msg = ""
-    msg += "op_decode ----> "
+    msg += "op_decode --> "
    #msg += "0x{0:0{1}X}".format(op.prefix, 2) + "{0:0{1}X}".format(op.code, 2) + "\t"
     if(op.prefix):
         msg += "{0:0{1}X}".format(op.prefix, 2) + " "

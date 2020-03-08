@@ -1,5 +1,6 @@
 import util_dlog as dlog
 import util_events as events
+import util_config as config
 import hw_lcd as lcd
 import hw_z80 as z80
 import hw_gameboy as gameboy
@@ -46,12 +47,14 @@ def main():
     window_flags = 0
     window_flags |= sdl2.SDL_WINDOW_RESIZABLE
     window_flags |= sdl2.SDL_WINDOW_SHOWN
+    window_x = config.get("sdlboy_window_x", sdl2.SDL_WINDOWPOS_CENTERED)
+    window_y = config.get("sdlboy_window_y", sdl2.SDL_WINDOWPOS_CENTERED)
+    window_w = config.get("sdlboy_window_w", 640)
+    window_h = config.get("sdlboy_window_h", 480)
     glob.window = sdl2.SDL_CreateWindow(
         b"Dot Matrix Game",
-        sdl2.SDL_WINDOWPOS_CENTERED,
-        sdl2.SDL_WINDOWPOS_CENTERED,
-        glob.window_rect.w,
-        glob.window_rect.h,  
+        window_x, window_y,
+        window_w, window_h,
         window_flags
     )
     
@@ -107,7 +110,10 @@ def main():
             elif event.type == sdl2.SDL_QUIT:
                 glob.exit_requested = True
             elif event.type == sdl2.SDL_WINDOWEVENT:
-                if(event.window.event == sdl2.SDL_WINDOWEVENT_RESIZED):
+                if(
+                    event.window.event == sdl2.SDL_WINDOWEVENT_RESIZED or
+                    event.window.event == sdl2.SDL_WINDOWEVENT_MOVED      
+                ):
                     on_window_resize()
             # let console handle events
             if(sdlboy_console.is_open):
@@ -195,6 +201,15 @@ def on_window_resize():
         glob.screen_rect_dst.y = int(window_hf/2.0-window_wf/screen_af/2.0)
     if(sdlboy_console.is_open):
         sdlboy_console.resize()
+    # save window position
+    x = ctypes.c_int()
+    y = ctypes.c_int()
+    sdl2.SDL_GetWindowPosition(glob.window, x, y)
+    config.set("sdlboy_window_x", x.value)
+    config.set("sdlboy_window_y", y.value)
+    config.set("sdlboy_window_w", w.value)
+    config.set("sdlboy_window_h", h.value)
+    config.save()
         
 def on_scanline_change(data):
     if(data == 0):
