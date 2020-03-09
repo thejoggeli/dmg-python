@@ -113,8 +113,9 @@ def intramecho_name():
 
 # empty but unusable for I/O
 def unused_read(addr):
-    dlog.print_error("MEM", "unused_read not implemented")
-    pass
+    if(dlog.enable.mem_warnings):
+        dlog.print_warning("MEM", "unused_read not implemented")
+    return 0
 def unused_write(addr, byte):
     # don't write anything
     # super mario land 1 seems to be writing to this address

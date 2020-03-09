@@ -6,8 +6,10 @@ import hw_cartridge as car
 import hw_video as vid
 
 def init():
-   #car.load_gb_file("roms/Super Mario Land (JUE) (V1.1) [!].gb")
-    car.load_gb_file("roms/Donkey Kong Land 2 (USA, Europe) (SGB Enhanced).gb")
+    #car.load_gb_file("roms/Super Mario Land (JUE) (V1.1) [!].gb")
+    #car.load_gb_file("roms/Donkey Kong Land 2 (USA, Europe) (SGB Enhanced).gb")
+    #car.load_gb_file("roms/Super Mario Land 2 - 6 Golden Coins (USA, Europe).gb")
+    car.load_gb_file("roms/Tetris (World) (Rev A).gb")
     car.print_info()
     reset()
     

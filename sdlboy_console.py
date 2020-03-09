@@ -145,7 +145,29 @@ class Textview:
                 value="",
                 buffer_size=256
             )
-            self.lines[i] = line            
+            self.lines[i] = line         
+        self.print_line("type help for help")
+    def help(self):
+        self.print_line("q          quit").text.set_color(220, 220, 255)
+        self.print_line("reset      hmmm ...").text.set_color(220, 220, 255)
+        self.print_line("st         print state").text.set_color(220, 220, 255)
+        self.print_line("s+N        N steps").text.set_color(220, 220, 255)
+        self.print_line("t+N        N seconds").text.set_color(220, 220, 255)
+        self.print_line("t=N        until t=N seconds").text.set_color(220, 220, 255)
+        self.print_line("pc=N       run until pc=N").text.set_color(220, 220, 255)
+        self.print_line("pc>N       run until pc<N").text.set_color(220, 220, 255)
+        self.print_line("pc<N       run until pc>N").text.set_color(220, 220, 255)
+        self.print_line("mem A B z  print memory A to B+B (z=show zeros)").text.set_color(220, 220, 255)
+        self.print_line("rb A       read  byte").text.set_color(220, 220, 255)
+        self.print_line("rw A       read  word").text.set_color(220, 220, 255)
+        self.print_line("wb A B     write byte").text.set_color(220, 220, 255)
+        self.print_line("wb A B     write word").text.set_color(220, 220, 255)
+        self.print_line("limit      set max cycles/frame (0=off)").text.set_color(220, 220, 255)
+        self.print_line("speed      set speed (1=off)").text.set_color(220, 220, 255)
+        self.print_line("F1         toggle console").text.set_color(220, 220, 255)
+        self.print_line("F2         toggle run").text.set_color(220, 220, 255)
+        self.print_line("suffix all print everything").text.set_color(220, 220, 255)
+        self.print_line("suffix war print warnings").text.set_color(220, 220, 255)    
     def render(self):    
         line_nr = self.line_ptr
         min_y = self.viewport.y - self.line_height
@@ -173,7 +195,8 @@ class Textview:
             self.line_ptr = self.num_lines-1
         self.lines[self.line_ptr].text.value = msg
         self.lines[self.line_ptr].text.update()
-        
+        self.lines[self.line_ptr].text.set_color(255,255,255)
+        return self.lines[self.line_ptr]
 
 class Inputview:
     text = None
@@ -502,9 +525,52 @@ class InputHandler:
                 user_input = user_input.replace("perf", "").strip()
                 print_perf = True
                 suffix_found = True       
-                
+        
         if(user_input == "q"):
             sdlboy_window.glob.exit_requested = True
+            return
+        elif(user_input == "help"):
+            textview.help()
+            return
+        elif(user_input.startswith("mem")):
+            if(log_free):
+                dlog.enable.errors()
+            self.print_spacer()
+            zeros = False
+            if(user_input.strip().endswith("z")):
+                user_input = user_input.replace("z", "").strip()
+                zeros = True
+            
+            split = user_input.replace("mem", "").strip().split(" ")
+            start = int(split[0], 16)
+            start = start - start%16
+            end   = start+int(split[1], 16)
+            while(end%16 != 0):
+                end+=1
+            
+            # head
+            head = "MEM  |"
+            for i in range(0, 16):
+                head += "  {0:0{1}X} ".format(i, 1)
+            dlog.print_msg("SYS", head + "|")
+    
+            dlog.print_msg("SYS", "".ljust(71, "-"))
+            
+            # body
+            line = None
+            for addr in range(start, end):
+                if(addr%16==0):
+                    if(line):
+                        dlog.print_msg("SYS", line + "|")
+                    left = (addr&0xFFF0)
+                    line = "{0:0{1}X}".format(left, 4) + " |"
+                byte = mem.read_byte(addr)
+                if(zeros):
+                    line += " {0:0{1}X} ".format(byte, 2)               
+                else:
+                    line += " {0:0{1}X} ".format(byte, 2).replace("00", "  ") 
+            dlog.print_msg("SYS", line + "|")
+            self.print_spacer()
             return
         elif(user_input.startswith("reset")):
             sdlboy_window.reset()

@@ -16,9 +16,11 @@ class Color:
         self.a = a
         self.c_rgba = (ctypes.c_uint)((r<<24)|(r<<16)|(r<<8)|a)
         
-color_map    = None
-bg_color_map = None
 pixels = None
+lcd_background_color = None
+sprite_color_palette = None
+bg_color_palette     = None
+bg_color_map         = None
 
 class State:
     enabled = 1
@@ -33,13 +35,24 @@ def init():
     global state
     state = State()
     
-    global color_map, bg_color_map
-    color_map    = [None]*4
-    color_map[3] = Color(0x00, 0x00, 0x00)
-    color_map[2] = Color(0x55, 0x55, 0x55)
-    color_map[1] = Color(0xAA, 0xAA, 0xAA)
-    color_map[0] = Color(0xFF, 0xFF, 0xFF)
-    bg_color_map = [None]*4
+    global lcd_background_color
+    global sprite_color_palette
+    global bg_color_palette, bg_color_map
+    
+    lcd_background_color = Color(0xFF, 0xFF, 0xFF)
+    
+    sprite_color_palette    = [None]*4
+    sprite_color_palette[3] = Color(0x00, 0x00, 0x00)
+    sprite_color_palette[2] = Color(0x55, 0x55, 0x55)
+    sprite_color_palette[1] = Color(0xAA, 0xAA, 0xAA)
+    sprite_color_palette[0] = Color(0xFF, 0xFF, 0xFF)
+    
+    bg_color_palette    = [None]*4
+    bg_color_palette[3] = Color(0x00, 0x00, 0x00)
+    bg_color_palette[2] = Color(0x55, 0x55, 0x55)
+    bg_color_palette[1] = Color(0xAA, 0xAA, 0xAA)
+    bg_color_palette[0] = Color(0xFF, 0xFF, 0xFF)
+    bg_color_map        = [None]*4
 
     global pixels
     pixels_inital = [0x808080FF]*(256*256)
@@ -73,7 +86,7 @@ def map_memory():
     mem.write_map[0xFF4B] = write_byte_0xFF4B
     
     mem.read_map[0xFF40] = read_byte
-    mem.read_map[0xFF41] = read_byte
+    mem.read_map[0xFF41] = read_byte_0xFF41
     mem.read_map[0xFF42] = read_byte
     mem.read_map[0xFF43] = read_byte
     mem.read_map[0xFF44] = read_byte
@@ -101,26 +114,48 @@ def map_memory():
 def update():
     state.frame_cycle_count += z80.state.cycles_delta
     state.scanline_cycle_count += z80.state.cycles_delta
-    
+        
     # update 0xFF44
     if(state.scanline_cycle_count >= 456):
+        # new scanline
         state.scanline_cycle_count -= 456
-        state.scanline_count += 1
-        if(state.scanline_count >= 154):
-            state.scanline_count -= 154
-           #state.frame_count += 1
+        state.scanline_count += 1        
+        if(state.scanline_count == 154):
+            state.scanline_count = 0      
             state.frame_cycle_count -= 70224
-            # reset V-Blank
-            mem.write_byte(0xFF0F, mem.read_byte(0xFF0F)&0xFE)
-        elif(state.scanline_count >= 144):
-            # set V-Bank
-            mem.write_byte(0xFF0F, mem.read_byte(0xFF0F)|0x01)
-        mem.write_byte(0xFF44, state.scanline_count)
+            # reset V-Blank interrupt flag
+            mem.iomem[0x0F] &= 0xFE 
+        if(state.scanline_count >= 144):
+            # scanline 144-153 (V-Blank)
+            # set V-Blank interrupt flag
+            mem.iomem[0x0F] |= 0x01 
+        if(mem.iomem[0x41]&0x40 and state.scanline_count == mem.iomem[0x45]):
+            mem.iomem[0x0F] |= 0x02 # set STAT interrupt flag
+        # write new scanline to LY
+        mem.iomem[0x44] = state.scanline_count
+        # fire new scanline event
         events.fire(events.EVENT_SCANLINE_CHANGE, (state.scanline_count))
-        
-    # TODO implement 0xFF40   
-    # TODO implement 0xFF41 
-    # TODO implement 0xFF45
+        # STAT bit 2
+        if(mem.iomem[0x45] == mem.iomem[0x44]):
+            mem.iomem[0x41] |= 0x04 # set bit 2
+        else:
+            mem.iomem[0x41] &= 0xFB # reset bit 2
+
+    # set STAT mode
+    if(mem.iomem[0x0F]&0x01):
+        mem.iomem[0x41] = (mem.iomem[0x41]&0xFC)|0x01 # mode 1 = V-Blank
+        if(mem.iomem[0x41]&0x10):
+            mem.iomem[0x0F] |= 0x02 # set STAT interrupt flag
+    elif(state.scanline_cycle_count < 80):
+        mem.iomem[0x41] = (mem.iomem[0x41]&0xFC)|0x02 # mode 2 = searching OAM
+        if(mem.iomem[0x41]&0x20):
+            mem.iomem[0x0F] |= 0x02 # set STAT interrupt flag
+    elif(state.scanline_cycle_count < 160):
+        mem.iomem[0x41] = (mem.iomem[0x41]&0xFC)|0x03 # mode 3 = transfering data
+    else:   
+        mem.iomem[0x41] = (mem.iomem[0x41]&0xFC)|0x00 # mode 0 = H-Blank
+        if(mem.iomem[0x41]&0x80):
+            mem.iomem[0x0F] |= 0x02 # set STAT interrupt flag
     
 def render():
 
@@ -137,17 +172,17 @@ def render():
     # LCD operation is off
     if(lcdc_7 == 0):
         for i in range(0, len(pixels)):
-            pixels[i] = color_map[0].c_rgba
+            pixels[i] = lcd_background_color.c_rgba
         return
         
     # Background & Window Display
     if(lcdc_0 == 1):
         # BG & Window Palette Data
-        bgp    = mem.iomem[0x47]        
-        bg_color_map[0] = color_map[(bgp>>0)&0x3]
-        bg_color_map[1] = color_map[(bgp>>2)&0x3]
-        bg_color_map[2] = color_map[(bgp>>4)&0x3]
-        bg_color_map[3] = color_map[(bgp>>6)&0x3]
+        bgp = mem.iomem[0x47]        
+        bg_color_map[3] = bg_color_palette[(bgp>>6)&0x3]
+        bg_color_map[2] = bg_color_palette[(bgp>>4)&0x3]
+        bg_color_map[1] = bg_color_palette[(bgp>>2)&0x3]
+        bg_color_map[0] = bg_color_palette[(bgp>>0)&0x3]
                 
         # BG Tile Map Display Select
         bg_tile_map_ptr_start = 0
@@ -226,8 +261,27 @@ def render():
                 else:
                     pixel_index_offset += 8
     return
-    
+
+def perform_dma(base_addr):
+    addr = base_addr << 8
+    if(dlog.enable.lcd):
+        dlog.print_msg("LCD", "DMA at address " + "0x{0:0{1}X}".format(addr, 4), cat="dma")
+    for i in range(0, 0xA0):
+        vid.spritemem[i] = mem.read_byte(addr)
+        addr += 1
+
 def read_byte(addr):
+    return mem.iomem[addr-0xFF00]
+    
+def read_byte_0xFF41(addr):
+    byte = mem.iomem[0x41]
+    byte |= 0x80 # bit 7 always 1    
+    if(mem.iomem[0x40]&0x80==0):
+        byte &= 0xF8 # bits 0-2 off if lcd off
+    return byte
+    
+def read_byte_debug(addr):
+    dlog.print_msg("LCD", "ACCESS " + "0x{0:0{1}X}".format(addr, 4))
     return mem.iomem[addr-0xFF00]
     
 # LCDC – LCD Control (R/W)    
@@ -244,10 +298,9 @@ def write_byte_0xFF40(addr, byte):
     mem.iomem[0x40] = byte
 
 # STAT – LCD Status (R/W)
-def write_byte_0xFF41(addr, byte):    
-    if(dlog.enable.mem_warnings):
-        dlog.print_warning("LCD", "write_byte_0xFF41 not implemented")
-    mem.iomem[0x41] = byte
+def write_byte_0xFF41(addr, byte):
+    # bits 2-0 are readonly
+    mem.iomem[0x41] = (byte&0xF8)|(mem.iomem[0x41]&7)
 
 # SCY - Scroll Y
 def write_byte_0xFF42(addr, byte):    
@@ -263,14 +316,12 @@ def write_byte_0xFF44(addr, byte):
 
 # LYC – LY Compare (R/W)
 def write_byte_0xFF45(addr, byte):
-    if(dlog.enable.mem_warnings):
-        dlog.print_warning("LCD", "write_0xFF45 not implemented")  
     mem.iomem[0x45] = byte 
    
 # DMA - Transfer and Start Address
 def write_byte_0xFF46(addr, byte):
-    dlog.print_error("LCD", "write_0xFF46 not implemented")  
     mem.iomem[0x46] = byte 
+    perform_dma(byte)
     
 # BGP - BG & Window Palette Data (R/W)
 def write_byte_0xFF47(addr, byte):
@@ -279,13 +330,13 @@ def write_byte_0xFF47(addr, byte):
 # OBP0 - Object Palette 0 Data (R/W)
 def write_byte_0xFF48(addr, byte):
     if(dlog.enable.mem_warnings):
-        dlog.print_warning("LCD", "write_0xFF48 not implemented")  
+        dlog.print_warning("LCD", "write_byte_0xFF48 not implemented")  
     mem.iomem[0x48] = byte 
     
 # OBP1 - Object Palette 1 Data (R/W)
 def write_byte_0xFF49(addr, byte):
     if(dlog.enable.mem_warnings):
-        dlog.print_warning("LCD", "write_0xFF49 not implemented")  
+        dlog.print_warning("LCD", "write_byte_0xFF49 not implemented")  
     mem.iomem[0x49] = byte 
 
 # WY - Window Y Position (R/W)

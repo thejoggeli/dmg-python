@@ -259,7 +259,6 @@ def update():
             ie_flags = mem.read_byte(0xFFFF)
             masked = if_flags&ie_flags
             if(masked > 0):
-                dlog.print_error("first interrupt!")
                 state.interrupt_master_enable = 0    
                 interrupt_cycles = 0
                 if(state.halted):

@@ -5,6 +5,7 @@ import sys
 silent = False
 
 class Enable():
+    debug = True
     sys = True
     z80 = True
     lcd = True
