@@ -3,10 +3,11 @@ import sdlboy_text
 import sdlboy_window
 import sdlboy_time
 import sdlboy_input
-import sdlboy_monitor
+import sdlboy_console_monitor
 import sdlboy_console_textview
 import sdlboy_console_inputview
-import sdlboy_console_topview
+import sdlboy_console_memview
+import sdlboy_console_tileview
 import time
 import hw_z80 as z80
 import hw_mem as mem
@@ -24,20 +25,52 @@ allow_input = False
 
 class Glob:
     renderer = None
+    resize_requested = False
 glob = Glob()
 
+monitor = None
 textview = None
 inputview = None
+memview = None
+tileview = None
 topview = None
 
+input_handler = None
+
 def init():
+    global input_handler
+    global monitor
     global textview, inputview
-    global topview, topview_tile, topview_mem
+    global memview, tileview
+    
     glob.renderer = sdlboy_window.glob.renderer
+    
+    monitor = sdlboy_console_monitor.Monitor()
+    monitor.set_background(0, 0, 0, 127)
+    monitor.set_padding(4,4,4,4)
+    
     textview = sdlboy_console_textview.Textview()
+    textview.line_height = textview.font.char_height+2
+    textview.line_offset = 1
+    textview.set_padding(0,4,0,4)
+    
     inputview = sdlboy_console_inputview.Inputview()
-    topview = sdlboy_console_topview.Topview()
-    input_handler.print_spacer()
+    inputview.line_height = inputview.font.char_height+4
+    inputview.line_offset = 1
+    inputview.set_padding(0,4,0,4)
+    
+    memview = sdlboy_console_memview.Memview()
+    memview.set_background(0, 0, 0, 127)
+    memview.set_visible(False)
+    
+    tileview = sdlboy_console_tileview.Tileview()    
+    tileview.set_background(0, 0, 0, 127)
+    tileview.set_visible(False)
+    
+    set_topview(memview)
+    
+    input_handler = InputHandler()
+    
    #dlog.print_error = print_error
    #dlog.print_warning = print_warning
    #dlog.print_msg = print_msg
@@ -53,7 +86,6 @@ def set_open(b):
         sdl2.SDL_StartTextInput();
         is_open = True
         set_allow_input(False)
-        topview.open_memview()
         dlog.enable.errors()
     else:   
         #close 
@@ -61,6 +93,16 @@ def set_open(b):
         sdl2.SDL_StopTextInput();
         dlog.enable.errors()
         set_allow_input(True)
+        
+def set_topview(view):
+    global topview
+    if(topview == view):
+        return
+    if(topview != None):
+        topview.set_visible(False)
+    topview = view
+    if(topview != None):
+        topview.set_visible(True)
 
 def set_control(b):
     global has_control
@@ -71,22 +113,85 @@ def set_allow_input(b):
     allow_input = b
     
 def update():
-    topview.update()
+    if(monitor.is_visible):
+        monitor.update()
+    if(inputview.is_visible):
+        inputview.update()
+    if(textview.is_visible):
+        textview.update()
+    if(topview != None and topview.is_visible):
+        topview.update()
+    if(glob.resize_requested):
+        window_vp    = sdlboy_window.glob.window_rect
+        monitor_vp   = monitor.viewport_global_outer
+        inputview_vp = inputview.viewport_global_outer
+        textview_vp  = textview.viewport_global_outer
+        topview_vp   = None
+        
+        if(topview == None):
+            topview_vp = memview.viewport_global_outer
+        else:
+            topview_vp = topview.viewport_global_outer
+            
+        if(monitor.is_visible):            
+            x = 0
+            y = 0
+            w = monitor.preferred_w + monitor.padding_left + monitor.padding_right
+            h = window_vp.h
+            monitor.set_viewport(x, y, w, h)
     
+        # resize inputview
+        if(inputview.is_visible):
+            x = monitor_vp.x + monitor_vp.w
+            y = window_vp.h - inputview.line_height
+            w = window_vp.w - monitor_vp.w
+            h = inputview.line_height        
+            inputview.set_viewport(x, y, w, h)
+        
+        # resize memview
+        if(memview.is_visible):
+            x = monitor_vp.x + monitor_vp.w
+            y = 0
+            w = window_vp.w - monitor_vp.w
+            h = 200
+            memview.set_viewport(x, y, w, h)
+        
+        # resize tileview
+        if(tileview.is_visible):
+            x = monitor_vp.x + monitor_vp.w
+            y = window_vp.h - inputview.font.char_height - inputview.line_height
+            w = window_vp.w - monitor_vp.w
+            h = inputview.font.char_height + inputview.line_height    
+            tileview.set_viewport(x, y, w, h)
+        
+        # resize textview
+        if(textview.is_visible):
+            x = monitor_vp.x + monitor_vp.w
+            y = topview_vp.y + topview_vp.h
+            w = window_vp.w - monitor_vp.w
+            h = window_vp.h - inputview_vp.h - topview_vp.h
+            textview.set_viewport(x, y, w, h)
+        
+        # resize no longer needed
+        glob.resize_requested = False
+        
 def resize():
-    inputview.resize()
-    topview.resize()
-    textview.resize()
+    glob.resize_requested = True
 
 def render():
     if(has_control):
         sdl2.SDL_SetRenderDrawColor(glob.renderer, 0x80, 0x00, 0x40, 0xB0)   
     else:
         sdl2.SDL_SetRenderDrawColor(glob.renderer, 0x00, 0x40, 0x80, 0xB0) 
-    sdl2.SDL_RenderFillRect(glob.renderer, sdlboy_window.glob.window_rect)    
-    textview.render()
-    inputview.render()
-    topview.render()
+    sdl2.SDL_RenderFillRect(glob.renderer, sdlboy_window.glob.window_rect)
+    if(monitor.is_visible):
+        monitor.render()
+    if(textview.is_visible):
+        textview.render()
+    if(inputview.is_visible):
+        inputview.render()
+    if(topview != None and topview.is_visible):
+        topview.render()
     
 def handle_event(event):
     global has_control       
@@ -116,9 +221,7 @@ def handle_event(event):
             inputview.clear()
         elif(key == 27):
             # ESC
-            if(topview.is_open):
-                topview.close()
-                resize()
+            set_topview(None)
         elif(key == 1073741885):       
             # F4
             set_control(not has_control)
@@ -129,6 +232,9 @@ def handle_event(event):
         elif(key == 1073741884):       
             # F3
             set_allow_input(not allow_input)
+        elif(key == 1073741883):       
+            # F2
+            monitor.set_visible(not monitor.is_visible)
         elif(key == 1073741906):
             # Up
             inputview.move_history_up()
@@ -183,6 +289,8 @@ def replace_tab(s, tabstop = 4):
     
 class InputHandler:
     spacer = "".ljust(71, "=")
+    def __init__(self):
+        self.print_spacer()
     def print_spacer(self):
         dlog.print_msg("SYS", self.spacer)
     def do_loop(self):
@@ -436,7 +544,6 @@ class InputHandler:
                 "Real=" + time_str + "s\t"
                 "Ratio=" + str(round(time_ratio,3))
             )
-input_handler = InputHandler()
 
 
     

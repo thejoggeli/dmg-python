@@ -2,26 +2,14 @@ import sdl2
 import sdlboy_text
 import sdlboy_window
 import sdlboy_console
+import sdlboy_console_component
 import sdlboy_time
-import sdlboy_input
-import sdlboy_monitor
-import sdlboy_console_textview
-import sdlboy_console_inputview
-import time
-import hw_z80 as z80
-import hw_mem as mem
-import hw_lcd as lcd
-import hw_cartridge as car
-import hw_video as vid
-import hw_gameboy as gameboy
 import util_dlog as dlog
 import util_config as config
-import util_code_loader as cld
 
-class Inputview:
+class Inputview(sdlboy_console_component.ConsoleComponent):
     text = None
     text_blocked = None
-    viewport = None
     font = None
     cursor_timer = 0
     cursor_rect = None
@@ -29,7 +17,9 @@ class Inputview:
     prev_messages_ptr = -1
     prev_messages_max = 32
     cursor_position = 4
-    def __init__(self):
+    line_height = 0
+    line_offset = 0
+    def on_init(self):
         self.font = sdlboy_text.get_font("console")   
         self.text = sdlboy_text.Text(
             font=self.font,
@@ -42,36 +32,35 @@ class Inputview:
             buffer_size=256
         )
         self.text.update()
-        self.viewport = sdl2.SDL_Rect(0, 0, 0, 0) 
         self.cursor_rect = sdl2.SDL_Rect(0, 0, 0, 0) 
+        # load saved history
         saved_history = config.get("sdlboy_console_history", False)
         if(saved_history):
             self.prev_messages = saved_history
-            self.prev_messages_ptr = len(self.prev_messages)-1
-    def render(self):
+            self.prev_messages_ptr = len(self.prev_messages)-1    
+    def on_update(self):
+        self.repaint()
+    def on_render(self):  
         if(sdlboy_console.allow_input):
-            self.text_blocked.set_position(self.viewport.x, self.viewport.y + sdlboy_console.textview.line_offset)
+            self.text_blocked.set_position(0, self.line_offset)
             self.text_blocked.update()
             self.text_blocked.render()
         else:
-            self.text.set_position(self.viewport.x, self.viewport.y + sdlboy_console.textview.line_offset)
+            self.text.set_position(0, self.line_offset)
             self.text.update()
             self.text.render()
             self.cursor_timer += sdlboy_time.delta_time
             if(self.cursor_timer >= 1.5):
                 self.cursor_timer = 0.0
             if(self.cursor_timer <= 0.75):
-                self.cursor_rect.x = self.viewport.x + self.cursor_position*self.font.char_width
-                self.cursor_rect.y = self.viewport.y + sdlboy_console.textview.line_height
+                self.cursor_rect.x = self.cursor_position*self.font.char_width
+                self.cursor_rect.y = self.font.char_height + self.line_offset - 1
                 self.cursor_rect.w = self.font.char_width
-                self.cursor_rect.h = -4
-                sdl2.SDL_SetRenderDrawColor(sdlboy_console.glob.renderer, 255, 255, 255, 255)
-                sdl2.SDL_RenderFillRect(sdlboy_console.glob.renderer, self.cursor_rect)
-    def resize(self):
-        self.viewport.x = sdlboy_monitor.monitor.viewport.x + sdlboy_monitor.monitor.viewport.w + 4
-        self.viewport.y = sdlboy_window.glob.window_rect.h - sdlboy_console.textview.line_height-4
-        self.viewport.w = sdlboy_window.glob.window_rect.w - sdlboy_monitor.monitor.viewport.w
-        self.viewport.h = sdlboy_window.glob.window_rect.h - self.viewport.y    
+                self.cursor_rect.h = 4
+                sdl2.SDL_SetRenderDrawColor(self.renderer, 255, 255, 255, 255)
+                sdl2.SDL_RenderFillRect(self.renderer, self.cursor_rect)
+    def on_resize(self):
+        pass
     def on_enter(self):
         user_input = self.text.value[4:].strip()
         if(user_input != ""):
@@ -192,3 +181,4 @@ class Inputview:
         self.text.value = ">>> "
         self.cursor_position = 4
     
+   

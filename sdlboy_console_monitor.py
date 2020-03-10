@@ -3,6 +3,7 @@ import sdlboy_text
 import sdlboy_window
 import sdlboy_time
 import sdlboy_console
+import sdlboy_console_component
 import time
 import hw_z80 as z80
 import hw_mem as mem
@@ -14,39 +15,18 @@ import util_dlog as dlog
 import util_config as config
 import util_code_loader as cld
 
-class Glob:
-    renderer = None
-glob = Glob()
-
-monitor = None
-is_open = False
-
-class Monitor:
-    viewport = None
+class Monitor(sdlboy_console_component.ConsoleComponent):
     font = None
+    preferred_w = 0
     monitor_ptr = 0
     monitor_texts = []
-    def __init__(self):    
-        self.viewport = sdl2.SDL_Rect(0, 0, 0, 0)
+    line_spacing = 4
+    def on_init(self):
         self.font = sdlboy_text.get_font("console")
-    def monitor_grow(self):
-        text = sdlboy_text.Text(
-            font=self.font,
-            value="---", 
-            buffer_size=16
-        )
-        text.set_position(4, 4+len(self.monitor_texts)*(self.font.char_height+4))    
-        text.set_scale(1)
-        self.monitor_texts.append(text)
-    def monitor(self, str):
-        if(self.monitor_ptr >= len(self.monitor_texts)):
-            self.monitor_grow()
-        self.monitor_texts[self.monitor_ptr].value = str
-        self.monitor_texts[self.monitor_ptr].update()
-        self.monitor_ptr += 1
-    def render(self):                
-        sdl2.SDL_SetRenderDrawColor(glob.renderer, 0, 0, 0, 127)
-        sdl2.SDL_RenderFillRect(glob.renderer, self.viewport)         
+        self.preferred_w = self.font.char_width*15
+    def on_update(self):
+        self.repaint()
+    def on_render(self):
         self.monitor_ptr = 0        
         self.monitor("FPS:" + str(sdlboy_time.fps))
         speed_estimate = "{0:.1f}".format(round(sdlboy_window.glob.speed_estimate*100))  
@@ -124,44 +104,22 @@ class Monitor:
         self.monitor("  WX:" + "{0:0{1}d}".format(wx, 3))
         for i in range(0, len(self.monitor_texts)):
             self.monitor_texts[i].render()
-    def resize(self):
-        if(is_open):
-            self.viewport.x = 0
-            self.viewport.y = 0            
-            self.viewport.w = self.font.char_width*15+8
-            self.viewport.h = int(sdlboy_window.glob.window_rect.h)
-        else:
-            self.viewport.x = 0
-            self.viewport.y = 0
-            self.viewport.w = 0
-            self.viewport.h = 0
+    def on_resize(self):
+        pass    
+    def monitor_grow(self):
+        text = sdlboy_text.Text(
+            font=self.font,
+            value="---", 
+            buffer_size=16
+        )
+        text.set_position(0, len(self.monitor_texts)*(self.font.char_height+self.line_spacing))    
+        self.monitor_texts.append(text)
+    def monitor(self, str):
+        if(self.monitor_ptr >= len(self.monitor_texts)):
+            self.monitor_grow()
+        self.monitor_texts[self.monitor_ptr].value = str
+        self.monitor_texts[self.monitor_ptr].update()
+        self.monitor_ptr += 1   
         
-def init():
-    global monitor
-    glob.renderer = sdlboy_window.glob.renderer
-    monitor = Monitor()
     
-def set_open(b):
-    global is_open
-    if(is_open == b):
-        return
-    is_open = b
-    if(is_open):
-        # open
-        resize()
-        sdlboy_console.resize()
-    else:   
-        #close 
-        resize()
-        sdlboy_console.resize()
-        pass
-        
-def update():
-    pass
-    
-def render():
-    monitor.render()
-        
-def resize():
-    monitor.resize()
 

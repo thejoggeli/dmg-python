@@ -10,7 +10,6 @@ import sdlboy_text
 import sdlboy_input
 import sdlboy_time
 import sdlboy_console
-import sdlboy_monitor
 import ctypes
 import sdl2
 import time
@@ -91,14 +90,10 @@ def main():
     # sdlboy components
     sdlboy_input.init()
     sdlboy_console.init()
-    sdlboy_monitor.init()
     
     # open console
     sdlboy_console.set_open(True)
     sdlboy_console.set_control(False)
-    
-    # open monitor
-    sdlboy_monitor.set_open(True)
             
     # trigger resize
     on_window_resize()
@@ -123,10 +118,6 @@ def main():
         # poll events
         sdlboy_input.clear_on_keys()
         poll_events()         
-            
-        # update monitor
-        if(sdlboy_monitor.is_open):
-            sdlboy_monitor.update()  
 
         # update console
         if(sdlboy_console.is_open):
@@ -179,11 +170,7 @@ def main():
         # render console        
         if(sdlboy_console.is_open):
             sdlboy_console.render()
-            
-        # render monitor        
-        if(sdlboy_monitor.is_open):
-            sdlboy_monitor.render()
-        
+                    
         # present
         sdl2.SDL_RenderPresent(glob.renderer)
                 
@@ -226,10 +213,6 @@ def handle_keydown_event(event):
     # toggle console
     if(event.key.keysym.sym == 1073741882):
         sdlboy_console.set_open(not sdlboy_console.is_open)
-        sdlboy_monitor.set_open(sdlboy_console.is_open)
-    # toggle monitor
-    if(event.key.keysym.sym == 1073741883):
-        sdlboy_monitor.set_open(not sdlboy_monitor.is_open)
     if(sdlboy_console.allow_input):
         key = event.key.keysym.sym
         if(key == 1073741906): # up
@@ -292,8 +275,6 @@ def on_window_resize():
         glob.screen_rect_dst.h = int(window_wf/screen_af)
         glob.screen_rect_dst.x = 0
         glob.screen_rect_dst.y = int(window_hf/2.0-window_wf/screen_af/2.0)
-    if(sdlboy_monitor.is_open):
-        sdlboy_monitor.resize()
     if(sdlboy_console.is_open):
         sdlboy_console.resize()
     # save window position
