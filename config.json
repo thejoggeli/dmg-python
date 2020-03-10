@@ -1,12 +1,10 @@
 {
     "sdlboy_console_history": [
-        ">>> speed 0.02",
         ">>> t=10",
         ">>> speed 1.0",
         ">>> t=15",
         ">>> t=12",
         ">>> t=11",
-        ">>> help",
         ">>> speed 1",
         ">>> wewewe",
         ">>> mem ff00 100",
@@ -15,10 +13,8 @@
         ">>> d",
         ">>> a",
         ">>> b",
-        ">>> q",
         ">>> mem 0 100",
         ">>> mem 0 200",
-        ">>> reset",
         ">>> resetwasdwasdsdfsdwwwwwweweweweweweweew",
         ">>> speed 0.01",
         ">>> speed 0.0002",
@@ -31,7 +27,11 @@
         ">>> limit 30",
         ">>> limit 10",
         ">>> s+100",
-        ">>> s+1000"
+        ">>> s+1000",
+        ">>> reset",
+        ">>> speed 5",
+        ">>> q",
+        ">>> help"
     ],
     "sdlboy_window_h": 657,
     "sdlboy_window_w": 638,

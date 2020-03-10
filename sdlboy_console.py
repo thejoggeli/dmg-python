@@ -6,6 +6,7 @@ import sdlboy_input
 import sdlboy_monitor
 import sdlboy_console_textview
 import sdlboy_console_inputview
+import sdlboy_console_topview
 import time
 import hw_z80 as z80
 import hw_mem as mem
@@ -27,12 +28,15 @@ glob = Glob()
 
 textview = None
 inputview = None
+topview = None
 
 def init():
     global textview, inputview
+    global topview, topview_tile, topview_mem
     glob.renderer = sdlboy_window.glob.renderer
     textview = sdlboy_console_textview.Textview()
     inputview = sdlboy_console_inputview.Inputview()
+    topview = sdlboy_console_topview.Topview()
     input_handler.print_spacer()
    #dlog.print_error = print_error
    #dlog.print_warning = print_warning
@@ -49,7 +53,7 @@ def set_open(b):
         sdl2.SDL_StartTextInput();
         is_open = True
         set_allow_input(False)
-        resize()
+        topview.open_memview()
         dlog.enable.errors()
     else:   
         #close 
@@ -66,11 +70,12 @@ def set_allow_input(b):
     global allow_input
     allow_input = b
     
-def update():    
-    pass
+def update():
+    topview.update()
     
 def resize():
     inputview.resize()
+    topview.resize()
     textview.resize()
 
 def render():
@@ -81,6 +86,7 @@ def render():
     sdl2.SDL_RenderFillRect(glob.renderer, sdlboy_window.glob.window_rect)    
     textview.render()
     inputview.render()
+    topview.render()
     
 def handle_event(event):
     global has_control       
@@ -108,13 +114,20 @@ def handle_event(event):
         elif(key == 99 and sdlboy_input.is_key_down(1073742048)):
             # CTRL-C
             inputview.clear()
-        elif(key == 1073741885):         
+        elif(key == 27):
+            # ESC
+            if(topview.is_open):
+                topview.close()
+                resize()
+        elif(key == 1073741885):       
+            # F4
             set_control(not has_control)
             if(has_control):
                 dlog.enable.all()
             else:
                 dlog.enable.errors()
-        elif(key == 1073741884):         
+        elif(key == 1073741884):       
+            # F3
             set_allow_input(not allow_input)
         elif(key == 1073741906):
             # Up

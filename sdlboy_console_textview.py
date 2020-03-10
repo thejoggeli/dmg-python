@@ -90,12 +90,12 @@ class Textview:
             # next line
             line_nr += 1
             if(line_nr >= self.num_lines):
-                line_nr = 0 
+                line_nr = 0
     def resize(self):    
         self.viewport.x = sdlboy_console.inputview.viewport.x
-        self.viewport.y = 0
+        self.viewport.y = sdlboy_console.topview.viewport.y + sdlboy_console.topview.viewport.h
         self.viewport.w = sdlboy_window.glob.window_rect.w - sdlboy_monitor.monitor.viewport.w
-        self.viewport.h = sdlboy_window.glob.window_rect.h - sdlboy_console.inputview.viewport.h
+        self.viewport.h = sdlboy_window.glob.window_rect.h - sdlboy_console.inputview.viewport.h - self.viewport.y
         for i in range(0, self.num_lines):
             self.lines[i].text.update()
     def print_line(self, msg, bg=None):
