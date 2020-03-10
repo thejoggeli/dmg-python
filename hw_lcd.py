@@ -19,6 +19,7 @@ class Color:
 pixels = None
 lcd_background_color = None
 sprite_color_palette = None
+sprite_color_map     = None
 bg_color_palette     = None
 bg_color_map         = None
 
@@ -36,7 +37,7 @@ def init():
     state = State()
     
     global lcd_background_color
-    global sprite_color_palette
+    global sprite_color_palette, sprite_color_map
     global bg_color_palette, bg_color_map
     
     lcd_background_color = Color(0xFF, 0xFF, 0xFF)
@@ -46,6 +47,7 @@ def init():
     sprite_color_palette[2] = Color(0x55, 0x55, 0x55)
     sprite_color_palette[1] = Color(0xAA, 0xAA, 0xAA)
     sprite_color_palette[0] = Color(0xFF, 0xFF, 0xFF)
+    sprite_color_map        = [None]*4
     
     bg_color_palette    = [None]*4
     bg_color_palette[3] = Color(0x00, 0x00, 0x00)
@@ -209,8 +211,7 @@ def render():
                 bg_tile_data_ptr = bg_tile_data_ptr*16 + 0x1000
                 # draw tile
                 pixel_index = pixel_index_offset
-                for i in range(0, 8):          
-                    # left pixels     
+                for i in range(0, 8):        
                     byte_1 = vid.videoram[bg_tile_data_ptr]       
                     byte_2 = vid.videoram[bg_tile_data_ptr+1]       
                     pixels[pixel_index+0] = bg_color_map[((byte_2>>6)&0x2)|((byte_1>>7)&0x1)].c_rgba
@@ -240,7 +241,6 @@ def render():
                 # draw tile
                 pixel_index = pixel_index_offset
                 for i in range(0, 8):          
-                    # left pixels     
                     byte_1 = vid.videoram[bg_tile_data_ptr]       
                     byte_2 = vid.videoram[bg_tile_data_ptr+1]       
                     pixels[pixel_index+0] = bg_color_map[((byte_2>>6)&0x2)|((byte_1>>7)&0x1)].c_rgba
@@ -260,6 +260,74 @@ def render():
                     pixel_index_offset += (256*7+8)
                 else:
                     pixel_index_offset += 8
+                    
+    # OBJ (Sprite) Display
+    if(lcdc_1):
+        spritemem_ptr = 0
+        if(lcdc_2):
+            # 8x16 sprites  
+            for i in range(0, 40):
+                # read spritemem
+                y       = vid.spritemem[spritemem_ptr]-16
+                x       = vid.spritemem[spritemem_ptr+1]-8            
+                pattern = vid.spritemem[spritemem_ptr+2]&0xFE
+                flags   = vid.spritemem[spritemem_ptr+3]    
+                # TODO implement flags
+                # color map
+                sprite_color_map[0] = sprite_color_palette[0]
+                sprite_color_map[1] = sprite_color_palette[1]
+                sprite_color_map[2] = sprite_color_palette[2]
+                sprite_color_map[3] = sprite_color_palette[3]
+                # draw pattern
+                pattern_ptr = pattern*16
+                pixel_ptr = y*256+x
+                for i in range(0, 16):
+                    byte_1 = vid.videoram[pattern_ptr]       
+                    byte_2 = vid.videoram[pattern_ptr+1]       
+                    pixels[pixel_ptr+0] = sprite_color_map[((byte_2>>6)&0x2)|((byte_1>>7)&0x1)].c_rgba
+                    pixels[pixel_ptr+1] = sprite_color_map[((byte_2>>5)&0x2)|((byte_1>>6)&0x1)].c_rgba
+                    pixels[pixel_ptr+2] = sprite_color_map[((byte_2>>4)&0x2)|((byte_1>>5)&0x1)].c_rgba
+                    pixels[pixel_ptr+3] = sprite_color_map[((byte_2>>3)&0x2)|((byte_1>>4)&0x1)].c_rgba
+                    pixels[pixel_ptr+4] = sprite_color_map[((byte_2>>2)&0x2)|((byte_1>>3)&0x1)].c_rgba
+                    pixels[pixel_ptr+5] = sprite_color_map[((byte_2>>1)&0x2)|((byte_1>>2)&0x1)].c_rgba
+                    pixels[pixel_ptr+6] = sprite_color_map[((byte_2>>0)&0x2)|((byte_1>>1)&0x1)].c_rgba
+                    pixels[pixel_ptr+7] = sprite_color_map[((byte_2<<1)&0x2)|((byte_1>>0)&0x1)].c_rgba
+                    pixel_ptr += 256
+                    pattern_ptr += 2
+                # increment for next sprite
+                spritemem_ptr += 4      
+        else:
+            # 8x8 sprites            
+            for i in range(0, 40):
+                # read spritemem
+                y       = vid.spritemem[spritemem_ptr]-16
+                x       = vid.spritemem[spritemem_ptr+1]-8            
+                pattern = vid.spritemem[spritemem_ptr+2]            
+                flags   = vid.spritemem[spritemem_ptr+3]   
+                # TODO implement flags 
+                # color map
+                sprite_color_map[0] = sprite_color_palette[0]
+                sprite_color_map[1] = sprite_color_palette[1]
+                sprite_color_map[2] = sprite_color_palette[2]
+                sprite_color_map[3] = sprite_color_palette[3]
+                # draw pattern
+                pattern_ptr = pattern*16
+                pixel_ptr = y*256+x
+                for i in range(0, 8):
+                    byte_1 = vid.videoram[pattern_ptr]       
+                    byte_2 = vid.videoram[pattern_ptr+1]       
+                    pixels[pixel_ptr+0] = sprite_color_map[((byte_2>>6)&0x2)|((byte_1>>7)&0x1)].c_rgba
+                    pixels[pixel_ptr+1] = sprite_color_map[((byte_2>>5)&0x2)|((byte_1>>6)&0x1)].c_rgba
+                    pixels[pixel_ptr+2] = sprite_color_map[((byte_2>>4)&0x2)|((byte_1>>5)&0x1)].c_rgba
+                    pixels[pixel_ptr+3] = sprite_color_map[((byte_2>>3)&0x2)|((byte_1>>4)&0x1)].c_rgba
+                    pixels[pixel_ptr+4] = sprite_color_map[((byte_2>>2)&0x2)|((byte_1>>3)&0x1)].c_rgba
+                    pixels[pixel_ptr+5] = sprite_color_map[((byte_2>>1)&0x2)|((byte_1>>2)&0x1)].c_rgba
+                    pixels[pixel_ptr+6] = sprite_color_map[((byte_2>>0)&0x2)|((byte_1>>1)&0x1)].c_rgba
+                    pixels[pixel_ptr+7] = sprite_color_map[((byte_2<<1)&0x2)|((byte_1>>0)&0x1)].c_rgba
+                    pixel_ptr += 256
+                    pattern_ptr += 2
+                # increment for next sprite
+                spritemem_ptr += 4                    
     return
 
 def perform_dma(base_addr):

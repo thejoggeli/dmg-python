@@ -240,14 +240,14 @@ def handle_keydown_event(event):
             joy.press_dir(joy.DIR_LEFT)
         elif(key == 1073741903): # right
             joy.press_dir(joy.DIR_RIGHT)
-        elif(key == 115): # S
-            joy.press_btn(joy.BTN_A)
-        elif(key == 100): # D
-            joy.press_btn(joy.BTN_B)
-        elif(key == 119): # W
-            joy.press_btn(joy.BTN_START)
-        elif(key == 101): # E
+        elif(key == 8): # Backspace
             joy.press_btn(joy.BTN_SELECT)
+        elif(key == 13): # D
+            joy.press_btn(joy.BTN_START)
+        elif(key == 119): # W
+            joy.press_btn(joy.BTN_A)
+        elif(key == 101): # E
+            joy.press_btn(joy.BTN_B)
 
 def handle_keyup_event(event):
     sdlboy_input.handle_key_up(event)
@@ -260,14 +260,14 @@ def handle_keyup_event(event):
         joy.release_dir(joy.DIR_LEFT)
     elif(key == 1073741903): # right
         joy.release_dir(joy.DIR_RIGHT)
-    elif(key == 115): # S
-        joy.release_btn(joy.BTN_A)
-    elif(key == 100): # D
-        joy.release_btn(joy.BTN_B)
-    elif(key == 119): # W
-        joy.release_btn(joy.BTN_START)
-    elif(key == 101): # E
+    elif(key == 8): # Backspace
         joy.release_btn(joy.BTN_SELECT)
+    elif(key == 13): # Enter
+        joy.release_btn(joy.BTN_START)
+    elif(key == 119): # W
+        joy.release_btn(joy.BTN_A)
+    elif(key == 101): # E
+        joy.release_btn(joy.BTN_B)
         
 def on_window_resize():
     w = ctypes.c_int()

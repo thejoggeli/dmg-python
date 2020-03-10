@@ -5,16 +5,23 @@ import hw_lcd as lcd
 import hw_cartridge as car
 import hw_video as vid
 import hw_joypad as joy
+import sys
 
 roms = {
     "mario1":    "Super Mario Land (JUE) (V1.1) [!].gb",
     "mario2":    "Super Mario Land 2 - 6 Golden Coins (USA, Europe).gb",
     "tetris":    "Tetris (World) (Rev A).gb",
     "donkey2":   "Donkey Kong Land 2 (USA, Europe) (SGB Enhanced).gb",
+    "pokemon":   "Pokemon - Blue Version (UE) [S][!].gb",
 }
 
 def init():
-    car.load_gb_file("roms/"+roms["donkey2"])
+    game = "tetris"
+    if(len(sys.argv) > 1):
+        arg_game = sys.argv[1]
+        if(arg_game in roms):
+            game = arg_game
+    car.load_gb_file("roms/"+roms[game])
     car.print_info()
     reset()
     

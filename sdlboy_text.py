@@ -86,6 +86,10 @@ class Text:
     height = 0
     target_rect = 0
     scale = 1
+    bg_r = 0
+    bg_g = 0
+    bg_b = 0
+    bg_a = 0
     def __init__(self, font=None, value="", buffer_size=32):
         self.font = font
         self.value = value      
@@ -127,7 +131,7 @@ class Text:
     def update(self):
         prev_target = sdl2.SDL_GetRenderTarget(glob.renderer)
         sdl2.SDL_SetRenderTarget(glob.renderer, self.texture)
-        sdl2.SDL_SetRenderDrawColor(glob.renderer, 0, 0, 0, 0)
+        sdl2.SDL_SetRenderDrawColor(glob.renderer, self.bg_r, self.bg_g, self.bg_b, self.bg_a)
         sdl2.SDL_RenderClear(glob.renderer);
         length = len(self.value)
         if(length > self.buffer_size):
@@ -154,6 +158,11 @@ class Text:
         self.target_rect.h = int(s*self.buffer_rect.h)
     def set_color(self, r, g, b):
         sdl2.SDL_SetTextureColorMod(self.texture, r, g, b)
+    def set_color_background(self, r, g, b, a):
+        self.bg_r = r
+        self.bg_g = g
+        self.bg_b = b
+        self.bg_a = a
     def render(self):
         sdl2.SDL_RenderCopy(
             glob.renderer, 

@@ -22,6 +22,10 @@ allow_input = False
 class Glob:
     renderer = None
 glob = Glob()
+
+class Line:
+    text = None
+    bg = None
     
 class Textview:
     num_lines = 256
@@ -29,8 +33,10 @@ class Textview:
     line_height = 0
     line_offset = 1
     line_ptr = 0
+    line_rect = 0
     viewport = None
     def __init__(self):
+        self.line_rect = sdl2.SDL_Rect(0, 0, 0, 0)
         self.viewport = sdl2.SDL_Rect(0, 0, 0, 0)
         self.lines = [None]*self.num_lines
         self.font = sdlboy_text.get_font("console")
@@ -75,8 +81,15 @@ class Textview:
         for i in range(0, self.num_lines):
             line = self.lines[line_nr]
             line.text.set_position(pos_x, pos_y)
-            pos_y -= self.line_height
+            if(line.bg):            
+                sdl2.SDL_SetRenderDrawColor(glob.renderer, line.bg[0], line.bg[1], line.bg[2], line.bg[3])
+                self.line_rect.x = pos_x
+                self.line_rect.y = pos_y
+                self.line_rect.w = line.text.width
+                self.line_rect.h = self.line_height
+                sdl2.SDL_RenderFillRect(glob.renderer, self.line_rect)
             line.text.render()
+            pos_y -= self.line_height
             if(pos_y < min_y):
                 break
             # next line
@@ -88,13 +101,16 @@ class Textview:
         self.viewport.y = 0
         self.viewport.w = sdlboy_window.glob.window_rect.w - sdlboy_monitor.monitor.viewport.w
         self.viewport.h = sdlboy_window.glob.window_rect.h - inputview.viewport.h
-    def print_line(self, msg):
+        for i in range(0, self.num_lines):
+            self.lines[i].text.update()
+    def print_line(self, msg, bg=None):
         self.line_ptr -= 1
         if(self.line_ptr < 0):
             self.line_ptr = self.num_lines-1
         self.lines[self.line_ptr].text.value = msg
-        self.lines[self.line_ptr].text.update()
         self.lines[self.line_ptr].text.set_color(255,255,255)
+        self.lines[self.line_ptr].text.update()
+        self.lines[self.line_ptr].bg = bg
         return self.lines[self.line_ptr]
 
 class Inputview:
@@ -270,9 +286,6 @@ class Inputview:
     def clear(self):
         self.text.value = ">>> "
         self.cursor_position = 4
-
-class Line:
-    text = None
     
 textview = None
 inputview = None
@@ -476,8 +489,10 @@ class InputHandler:
             for i in range(0, 16):
                 head += "  {0:0{1}X} ".format(i, 1)
             dlog.print_msg("SYS", head + "|")
+            textview.print_line(head + "|", bg=(0,0,0,127))
     
             dlog.print_msg("SYS", "".ljust(71, "-"))
+            textview.print_line("".ljust(71, "-"), bg=(0,0,0,127))
             
             # body
             line = None
@@ -485,6 +500,7 @@ class InputHandler:
                 if(addr%16==0):
                     if(line):
                         dlog.print_msg("SYS", line + "|")
+                        textview.print_line(line + "|", bg=(0,0,0,127))
                     left = (addr&0xFFF0)
                     line = "{0:0{1}X}".format(left, 4) + " |"
                 byte = mem.read_byte(addr)
@@ -493,6 +509,8 @@ class InputHandler:
                 else:
                     line += " {0:0{1}X} ".format(byte, 2).replace("00", "  ") 
             dlog.print_msg("SYS", line + "|")
+            textview.print_line(line + "|", bg=(0,0,0,127))
+            textview.print_line("".ljust(71, "-"), bg=(0,0,0,127))
             self.print_spacer()
             return
         elif(user_input.startswith("reset")):
