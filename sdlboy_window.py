@@ -5,10 +5,12 @@ import hw_lcd as lcd
 import hw_z80 as z80
 import hw_gameboy as gameboy
 import hw_mem as mem
+import hw_joypad as joy
 import sdlboy_text
 import sdlboy_input
 import sdlboy_time
 import sdlboy_console
+import sdlboy_monitor
 import ctypes
 import sdl2
 import time
@@ -86,13 +88,17 @@ def main():
    #sdlboy_text.load_font("console", file="res/font.png", char_size=(7, 9))
     sdlboy_text.load_font("console", file="res/font_large.png", char_size=(14, 18))
            
-    # input
+    # sdlboy components
     sdlboy_input.init()
-    
-    # console
     sdlboy_console.init()
-    sdlboy_console.open()
+    sdlboy_monitor.init()
+    
+    # open console
+    sdlboy_console.set_open(True)
     sdlboy_console.set_control(False)
+    
+    # open monitor
+    sdlboy_monitor.set_open(True)
             
     # trigger resize
     on_window_resize()
@@ -116,7 +122,11 @@ def main():
             
         # poll events
         sdlboy_input.clear_on_keys()
-        poll_events()           
+        poll_events()         
+            
+        # update monitor
+        if(sdlboy_monitor.is_open):
+            sdlboy_monitor.update()  
 
         # update console
         if(sdlboy_console.is_open):
@@ -169,6 +179,10 @@ def main():
         # render console        
         if(sdlboy_console.is_open):
             sdlboy_console.render()
+            
+        # render monitor        
+        if(sdlboy_monitor.is_open):
+            sdlboy_monitor.render()
         
         # present
         sdl2.SDL_RenderPresent(glob.renderer)
@@ -192,15 +206,9 @@ def poll_events():
     event = glob.event
     while sdl2.SDL_PollEvent(ctypes.byref(event)) != 0:
         if(event.type == sdl2.SDL_KEYDOWN):
-            sdlboy_input.handle_key_down(event)
-            # toggle console
-            if(event.key.keysym.sym == 1073741882):
-                if(sdlboy_console.is_open):
-                    sdlboy_console.close()
-                else:
-                    sdlboy_console.open()                        
+            handle_keydown_event(event)
         elif(event.type == sdl2.SDL_KEYUP):
-            sdlboy_input.handle_key_up(event)
+            handle_keyup_event(event)
         elif event.type == sdl2.SDL_QUIT:
             glob.exit_requested = True
         elif event.type == sdl2.SDL_WINDOWEVENT:
@@ -212,7 +220,55 @@ def poll_events():
         # let console handle events
         if(sdlboy_console.is_open):
             sdlboy_console.handle_event(event) 
-    
+
+def handle_keydown_event(event):
+    sdlboy_input.handle_key_down(event)
+    # toggle console
+    if(event.key.keysym.sym == 1073741882):
+        sdlboy_console.set_open(not sdlboy_console.is_open)
+        sdlboy_monitor.set_open(sdlboy_console.is_open)
+    # toggle monitor
+    if(event.key.keysym.sym == 1073741883):
+        sdlboy_monitor.set_open(not sdlboy_monitor.is_open)
+    if(sdlboy_console.allow_input):
+        key = event.key.keysym.sym
+        if(key == 1073741906): # up
+            joy.press_dir(joy.DIR_UP)
+        elif(key == 1073741905): # down
+            joy.press_dir(joy.DIR_DOWN)
+        elif(key == 1073741904): # left
+            joy.press_dir(joy.DIR_LEFT)
+        elif(key == 1073741903): # right
+            joy.press_dir(joy.DIR_RIGHT)
+        elif(key == 115): # S
+            joy.press_btn(joy.BTN_A)
+        elif(key == 100): # D
+            joy.press_btn(joy.BTN_B)
+        elif(key == 119): # W
+            joy.press_btn(joy.BTN_START)
+        elif(key == 101): # E
+            joy.press_btn(joy.BTN_SELECT)
+
+def handle_keyup_event(event):
+    sdlboy_input.handle_key_up(event)
+    key = event.key.keysym.sym
+    if(key == 1073741906): # up
+        joy.release_dir(joy.DIR_UP)
+    elif(key == 1073741905): # down
+        joy.release_dir(joy.DIR_DOWN)
+    elif(key == 1073741904): # left
+        joy.release_dir(joy.DIR_LEFT)
+    elif(key == 1073741903): # right
+        joy.release_dir(joy.DIR_RIGHT)
+    elif(key == 115): # S
+        joy.release_btn(joy.BTN_A)
+    elif(key == 100): # D
+        joy.release_btn(joy.BTN_B)
+    elif(key == 119): # W
+        joy.release_btn(joy.BTN_START)
+    elif(key == 101): # E
+        joy.release_btn(joy.BTN_SELECT)
+        
 def on_window_resize():
     w = ctypes.c_int()
     h = ctypes.c_int()
@@ -236,6 +292,8 @@ def on_window_resize():
         glob.screen_rect_dst.h = int(window_wf/screen_af)
         glob.screen_rect_dst.x = 0
         glob.screen_rect_dst.y = int(window_hf/2.0-window_wf/screen_af/2.0)
+    if(sdlboy_monitor.is_open):
+        sdlboy_monitor.resize()
     if(sdlboy_console.is_open):
         sdlboy_console.resize()
     # save window position

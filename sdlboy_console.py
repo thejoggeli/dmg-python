@@ -3,6 +3,7 @@ import sdlboy_text
 import sdlboy_window
 import sdlboy_time
 import sdlboy_input
+import sdlboy_monitor
 import time
 import hw_z80 as z80
 import hw_mem as mem
@@ -12,119 +13,15 @@ import hw_video as vid
 import hw_gameboy as gameboy
 import util_dlog as dlog
 import util_config as config
+import util_code_loader as cld
 
 is_open = False
 has_control = False
+allow_input = False
 
 class Glob:
     renderer = None
 glob = Glob()
-
-class Sideview:
-    viewport = None
-    font = None
-    monitor_ptr = 0
-    monitor_texts = []
-    def __init__(self):    
-        self.viewport = sdl2.SDL_Rect(0, 0, 0, 0)
-        self.font = sdlboy_text.get_font("console")
-    def monitor_grow(self):
-        text = sdlboy_text.Text(
-            font=self.font,
-            value="---", 
-            buffer_size=16
-        )
-        text.set_position(4, 4+len(self.monitor_texts)*(self.font.char_height+4))    
-        text.set_scale(1)
-        self.monitor_texts.append(text)
-    def monitor(self, str):
-        if(self.monitor_ptr >= len(self.monitor_texts)):
-            self.monitor_grow()
-        self.monitor_texts[self.monitor_ptr].value = str
-        self.monitor_texts[self.monitor_ptr].update()
-        self.monitor_ptr += 1
-    def render(self):                
-        sdl2.SDL_SetRenderDrawColor(glob.renderer, 0, 0, 0, 127)
-        sdl2.SDL_RenderFillRect(glob.renderer, self.viewport)         
-        self.monitor_ptr = 0        
-        self.monitor("FPS:" + str(sdlboy_time.fps))
-        speed_estimate = "{0:.1f}".format(round(sdlboy_window.glob.speed_estimate*100))  
-        self.monitor("Speed:" + speed_estimate + "%")         
-        limiter = str(sdlboy_window.glob.cycle_limiter)
-        if(limiter):
-            self.monitor("Limiter:" + str(limiter))    
-        else:
-            self.monitor("Limiter:off")
-            
-        self.monitor("Control:" + str(has_control))
-        self.monitor("T(Z80):" + "{0:.1f}".format(round(z80.state.time_passed, 1)))
-        self.monitor("T(IRL):" + "{0:.1f}".format(round(sdlboy_time.since_start, 1)))
-        
-        # Z80
-        self.monitor("BIOS:" + str(bool(mem.bios_running)))
-        self.monitor("")
-        self.monitor("======Z80======")
-        znhc = 0
-        znhc |= z80.reg.get_flag_z()<<3
-        znhc |= z80.reg.get_flag_n()<<2
-        znhc |= z80.reg.get_flag_h()<<1
-        znhc |= z80.reg.get_flag_c()<<0
-        ime = z80.state.interrupt_master_enable
-        ie_byte = mem.read_byte_silent(0xFFFF)
-        if_byte = mem.read_byte_silent(0xFF0F)
-        self.monitor("  PC:" + "0x{0:0{1}X}".format(z80.reg.pc, 4))
-        self.monitor("  SP:" + "0x{0:0{1}X}".format(z80.reg.sp, 4))
-        self.monitor("ZNHC:" + "{0:0{1}b}".format(znhc,4))
-        self.monitor("  AF:" + "0x{0:0{1}X}".format(z80.reg.get_af(), 4))
-        self.monitor("  BC:" + "0x{0:0{1}X}".format(z80.reg.get_bc(), 4))
-        self.monitor("  DE:" + "0x{0:0{1}X}".format(z80.reg.get_de(), 4))
-        self.monitor("  HL:" + "0x{0:0{1}X}".format(z80.reg.get_hl(), 4)) 
-        self.monitor(" IME:" + str(bool(ime)))
-        self.monitor("  IE:" + "%{0:0{1}b}".format(ie_byte,5))
-        self.monitor("  IF:" + "%{0:0{1}b}".format(if_byte,5))
-        self.monitor("HALT:" + str(bool(z80.state.halted)))
-        self.monitor("STOP:" + str(bool(z80.state.stopped)))
-        
-        # Cartridge
-        self.monitor("")
-        self.monitor("===CARTRIDGE===")
-        self.monitor("ROM#:" + "0x{0:0{1}X}".format(car.mbc_state.rom_bank_selected, 2))
-        self.monitor("RAM#:" + "0x{0:0{1}X}".format(car.mbc_state.ram_bank_selected, 2))
-        lcdc = mem.read_byte_silent(0xFF40)
-        stat = mem.read_byte_silent(0xFF41)
-        scy  = mem.read_byte_silent(0xFF42)
-        scx  = mem.read_byte_silent(0xFF43)
-        ly   = mem.read_byte_silent(0xFF44)
-        lyc  = mem.read_byte_silent(0xFF45)
-        dma  = mem.read_byte_silent(0xFF46)
-        bgp  = mem.read_byte_silent(0xFF47)
-        obp0 = mem.read_byte_silent(0xFF48)
-        obp1 = mem.read_byte_silent(0xFF49)
-        wx   = mem.read_byte_silent(0xFF4B)
-        wy   = mem.read_byte_silent(0xFF4A)
-        
-        # LCD
-        self.monitor("")
-        self.monitor("======LCD======")
-        self.monitor("LCDC:" + "%{0:0{1}b}".format(lcdc, 8))
-        self.monitor("STAT:" + "%{0:0{1}b}".format(stat, 8))
-        self.monitor(" SCY:" + "{0:0{1}d}".format(scy, 3))
-        self.monitor(" SCX:" + "{0:0{1}d}".format(scx, 3))
-        self.monitor("  LY:" + "{0:0{1}d}".format(ly, 3))
-        self.monitor(" LYC:" + "{0:0{1}d}".format(lyc, 3))
-        self.monitor(" DMA:" + "0x{0:0{1}X}".format(dma, 2))
-        self.monitor(" BGP:" + "%{0:0{1}b}".format(bgp, 8))
-        self.monitor("OBP0:" + "%{0:0{1}b}".format(obp0, 8))
-        self.monitor("OBP1:" + "%{0:0{1}b}".format(obp1, 8))
-        self.monitor("  WY:" + "{0:0{1}d}".format(wy, 3))
-        self.monitor("  WX:" + "{0:0{1}d}".format(wx, 3))
-        for i in range(0, len(self.monitor_texts)):
-            self.monitor_texts[i].render()
-    def resize(self):
-        self.viewport.x = 0
-        self.viewport.y = 0
-        self.viewport.w = 220
-        self.viewport.h = int(sdlboy_window.glob.window_rect.h)
     
 class Textview:
     num_lines = 256
@@ -165,7 +62,9 @@ class Textview:
         self.print_line("limit      set max cycles/frame (0=off)").text.set_color(220, 220, 255)
         self.print_line("speed      set speed (1=off)").text.set_color(220, 220, 255)
         self.print_line("F1         toggle console").text.set_color(220, 220, 255)
-        self.print_line("F2         toggle run").text.set_color(220, 220, 255)
+        self.print_line("F2         toggle monitor").text.set_color(220, 220, 255)
+        self.print_line("F3         toggle play mode").text.set_color(220, 220, 255)
+        self.print_line("F4         toggle auto/manual").text.set_color(220, 220, 255)
         self.print_line("suffix all print everything").text.set_color(220, 220, 255)
         self.print_line("suffix war print warnings").text.set_color(220, 220, 255)    
     def render(self):    
@@ -187,7 +86,7 @@ class Textview:
     def resize(self):    
         self.viewport.x = inputview.viewport.x
         self.viewport.y = 0
-        self.viewport.w = sdlboy_window.glob.window_rect.w - sideview.viewport.w
+        self.viewport.w = sdlboy_window.glob.window_rect.w - sdlboy_monitor.monitor.viewport.w
         self.viewport.h = sdlboy_window.glob.window_rect.h - inputview.viewport.h
     def print_line(self, msg):
         self.line_ptr -= 1
@@ -200,6 +99,7 @@ class Textview:
 
 class Inputview:
     text = None
+    text_blocked = None
     viewport = None
     font = None
     cursor_timer = 0
@@ -215,6 +115,11 @@ class Inputview:
             value=">>> ",
             buffer_size=256
         )
+        self.text_blocked = sdlboy_text.Text(
+            font=self.font,
+            value="PLAY MODE ENABLED (F3)",
+            buffer_size=256
+        )
         self.text.update()
         self.viewport = sdl2.SDL_Rect(0, 0, 0, 0) 
         self.cursor_rect = sdl2.SDL_Rect(0, 0, 0, 0) 
@@ -223,27 +128,33 @@ class Inputview:
             self.prev_messages = saved_history
             self.prev_messages_ptr = len(self.prev_messages)-1
     def render(self):
-        self.text.set_position(self.viewport.x, self.viewport.y + textview.line_offset)
-        self.text.update()
-        self.text.render()
-        self.cursor_timer += sdlboy_time.delta_time
-        if(self.cursor_timer >= 1.5):
-            self.cursor_timer = 0.0
-        if(self.cursor_timer <= 0.75):
-            self.cursor_rect.x = self.viewport.x + self.cursor_position*self.font.char_width
-            self.cursor_rect.y = self.viewport.y + textview.line_height
-            self.cursor_rect.w = self.font.char_width
-            self.cursor_rect.h = -4
-            sdl2.SDL_SetRenderDrawColor(glob.renderer, 255, 255, 255, 255)
-            sdl2.SDL_RenderFillRect(glob.renderer, self.cursor_rect)
+        if(allow_input):
+            self.text_blocked.set_position(self.viewport.x, self.viewport.y + textview.line_offset)
+            self.text_blocked.update()
+            self.text_blocked.render()
+        else:
+            self.text.set_position(self.viewport.x, self.viewport.y + textview.line_offset)
+            self.text.update()
+            self.text.render()
+            self.cursor_timer += sdlboy_time.delta_time
+            if(self.cursor_timer >= 1.5):
+                self.cursor_timer = 0.0
+            if(self.cursor_timer <= 0.75):
+                self.cursor_rect.x = self.viewport.x + self.cursor_position*self.font.char_width
+                self.cursor_rect.y = self.viewport.y + textview.line_height
+                self.cursor_rect.w = self.font.char_width
+                self.cursor_rect.h = -4
+                sdl2.SDL_SetRenderDrawColor(glob.renderer, 255, 255, 255, 255)
+                sdl2.SDL_RenderFillRect(glob.renderer, self.cursor_rect)
     def resize(self):
-        self.viewport.x = sideview.viewport.x + sideview.viewport.w + 4
+        self.viewport.x = sdlboy_monitor.monitor.viewport.x + sdlboy_monitor.monitor.viewport.w + 4
         self.viewport.y = sdlboy_window.glob.window_rect.h - textview.line_height-4
-        self.viewport.w = sdlboy_window.glob.window_rect.w - sideview.viewport.w
+        self.viewport.w = sdlboy_window.glob.window_rect.w - sdlboy_monitor.monitor.viewport.w
         self.viewport.h = sdlboy_window.glob.window_rect.h - self.viewport.y    
     def on_enter(self):
         user_input = self.text.value[4:].strip()
-        textview.print_line(self.text.value.strip())
+        if(user_input != ""):
+            textview.print_line(self.text.value.strip())
         if(len(self.text.value.strip()) > 4):
             try:
                 self.prev_messages.remove(self.text.value.strip())
@@ -363,14 +274,12 @@ class Inputview:
 class Line:
     text = None
     
-sideview = None
 textview = None
 inputview = None
 
 def init():
-    global sideview, textview, inputview
+    global textview, inputview
     glob.renderer = sdlboy_window.glob.renderer
-    sideview = Sideview()
     textview = Textview()
     inputview = Inputview()
     input_handler.print_spacer()
@@ -378,36 +287,47 @@ def init():
    #dlog.print_warning = print_warning
    #dlog.print_msg = print_msg
         
-def open():
+def set_open(b):
     global is_open
-    sdl2.SDL_SetRenderDrawBlendMode(glob.renderer, sdl2.SDL_BLENDMODE_BLEND)
-    sdl2.SDL_StartTextInput();
-    is_open = True
-    resize()
-    dlog.enable.errors()
-def close():
-    global is_open
-    is_open = False
-    sdl2.SDL_StopTextInput();
-    set_control(False)
-    dlog.enable.errors()
-    
+    if(is_open == b):
+        return
+    is_open = b
+    if(is_open):
+        # open
+        sdl2.SDL_SetRenderDrawBlendMode(glob.renderer, sdl2.SDL_BLENDMODE_BLEND)
+        sdl2.SDL_StartTextInput();
+        is_open = True
+        set_allow_input(False)
+        resize()
+        dlog.enable.errors()
+    else:   
+        #close 
+        is_open = False
+        sdl2.SDL_StopTextInput();
+        dlog.enable.errors()
+        set_allow_input(True)
+
 def set_control(b):
     global has_control
     has_control = b
+    
+def set_allow_input(b):
+    global allow_input
+    allow_input = b
     
 def update():    
     pass
     
 def resize():
-    sideview.resize()
     inputview.resize()
     textview.resize()
 
 def render():
-    sdl2.SDL_SetRenderDrawColor(glob.renderer, 0x00, 0x40, 0x80, 0xB0)
+    if(has_control):
+        sdl2.SDL_SetRenderDrawColor(glob.renderer, 0x80, 0x00, 0x40, 0xB0)   
+    else:
+        sdl2.SDL_SetRenderDrawColor(glob.renderer, 0x00, 0x40, 0x80, 0xB0) 
     sdl2.SDL_RenderFillRect(glob.renderer, sdlboy_window.glob.window_rect)    
-    sideview.render()
     textview.render()
     inputview.render()
     
@@ -437,12 +357,14 @@ def handle_event(event):
         elif(key == 99 and sdlboy_input.is_key_down(1073742048)):
             # CTRL-C
             inputview.clear()
-        elif(key == 1073741883):         
-            has_control = not has_control
+        elif(key == 1073741885):         
+            set_control(not has_control)
             if(has_control):
                 dlog.enable.all()
             else:
                 dlog.enable.errors()
+        elif(key == 1073741884):         
+            set_allow_input(not allow_input)
         elif(key == 1073741906):
             # Up
             inputview.move_history_up()
@@ -496,8 +418,9 @@ def replace_tab(s, tabstop = 4):
     return result
     
 class InputHandler:
+    spacer = "".ljust(71, "=")
     def print_spacer(self):
-        dlog.print_msg("SYS", "=======================================================================================")
+        dlog.print_msg("SYS", self.spacer)
     def do_loop(self):
         if(dlog.enable.sys):
             self.print_spacer()
@@ -674,7 +597,8 @@ class InputHandler:
                 # loop until cpu time = N seconds
                 target_time = float(val.replace("=", "").strip())
                 while(z80.state.time_passed < target_time):
-                    self.do_loop()
+                    self.do_loop()             
+            lcd.render()
         elif(user_input.startswith("pc")):
             if(log_free):
                 dlog.enable.errors()
@@ -695,12 +619,16 @@ class InputHandler:
                 while(z80.reg.pc != target_pc):
                     self.do_loop()   
             else:
-                raise ValueError("invalid input")
+                raise ValueError("invalid input")             
+            lcd.render()
             dlog.print_msg("SYS", "PC is now at " + "0x{0:0{1}X}".format(z80.reg.pc, 4))
         elif(user_input.strip() == ""):
             if(log_free):
                 dlog.enable.all()
-            self.do_loop()   
+            instr = cld.decode_instruction_to_string(z80.reg.pc)
+            textview.print_line(instr)
+            self.do_loop()            
+            lcd.render()
         elif(user_input.startswith("s")):
             if(log_free):
                 dlog.enable.errors()
@@ -708,14 +636,18 @@ class InputHandler:
             user_input = user_input.replace("+", "")
             steps = int(user_input)
             for i in range(0, steps):
-                self.do_loop()     
+                self.do_loop()              
+            lcd.render()
         else:       
             if(log_free): 
                 dlog.enable.all() 
             try:
                 steps = int(user_input)        
                 for i in range(0, steps):
+                    instr = cld.decode_instruction_to_string(z80.reg.pc)
+                    textview.print_line(instr)
                     self.do_loop()              
+                lcd.render()
             except:           
                 raise ValueError("invalid input")
         real_time_passed = time.time() - real_time_start

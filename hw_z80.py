@@ -368,8 +368,7 @@ def print_state():
         "D="  + "0x{0:0{1}X}".format(reg.d, 2) + "\t" +
         "H="  + "0x{0:0{1}X}".format(reg.h, 2) + "\t" +
         "A="  + "0x{0:0{1}X}".format(reg.a, 2) + "\t" +
-        "Z N H C" + "\t"
-        "Time".rjust(12, " "),
+        "Z N H C",
         cat="registers"
     )
     dlog.print_msg(
@@ -382,15 +381,15 @@ def print_state():
         str(reg.get_flag_z()) + " " +
         str(reg.get_flag_n()) + " " +
         str(reg.get_flag_h()) + " " +
-        str(reg.get_flag_c()) + "\t" + 
-        "{0:.3f}".format(round(state.time_passed, 3),3).rjust(12, " "),
+        str(reg.get_flag_c()),
         cat="registers"
     )
     
 def print_endst():
     dlog.print_msg(
         "Z80",
-        "Cycles="+str(state.cycles_delta),
+        "Cycles="+str(state.cycles_delta) + "\t" +
+        "Time="+"{0:.3f}".format(round(state.time_passed, 3),3),
         cat="z80_endst"
     )
     
@@ -1475,8 +1474,8 @@ op_map_nopref[0x66] = [op_ld_r1_hlmem,  (1, "LD", "H,(HL)")]
 op_map_nopref[0x6E] = [op_ld_r1_hlmem,  (1, "LD", "L,(HL)")]
 op_map_nopref[0xF2] = [op_ld_a_ff00c,   (1, "LD", "A,(C)")]
 op_map_nopref[0xE2] = [op_ld_ff00c_a,   (1, "LD", "(C),A")]
-op_map_nopref[0xF0] = [op_ld_a_ff00n,   (2, "LD", "A,(n)")]
-op_map_nopref[0xE0] = [op_ld_ff00n_a,   (2, "LD", "(n),A")]
+op_map_nopref[0xF0] = [op_ld_a_ff00n,   (2, "LDH", "A,(n)")]
+op_map_nopref[0xE0] = [op_ld_ff00n_a,   (2, "LDH", "(n),A")]
 op_map_nopref[0x3A] = [op_ldd_a_hlmem,  (1, "LD", "A,(HL-)")]
 op_map_nopref[0x32] = [op_ldd_hlmem_a,  (1, "LD", "(HL-),A")]
 op_map_nopref[0x2A] = [op_ldi_a_hlmem,  (1, "LD", "A,(HL+)")]

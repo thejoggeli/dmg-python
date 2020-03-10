@@ -43,11 +43,12 @@ class Enable():
     def all(self):    
         self.sys = True
         self.z80 = True
-        self.lcd = True
+        self.lcd = False
+        #self.lcd = True
         self.mem_warnings = True
         self.mem_read = True
         self.mem_write = True
-        self.car_state = True
+        #self.car_state = True
         self.car_banking = True
         self.car_ram_enable = True
              

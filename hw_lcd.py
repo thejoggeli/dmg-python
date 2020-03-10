@@ -98,18 +98,18 @@ def map_memory():
     mem.read_map[0xFF4A] = read_byte
     mem.read_map[0xFF4B] = read_byte
     
-    mem.name_map[0xFF40] = lambda: "LCDC - LCD Control (R/W)"
-    mem.name_map[0xFF41] = lambda: "STAT - LCD Status (R/W)"
-    mem.name_map[0xFF42] = lambda: "LCY - LCY Status (R/W)"
-    mem.name_map[0xFF43] = lambda: "LCX - LCX Status (R/W)"
-    mem.name_map[0xFF44] = lambda: "LY - LCD Current Scanline (R)"
-    mem.name_map[0xFF45] = lambda: "LYC - LY Compare (R/W)"
-    mem.name_map[0xFF46] = lambda: "DMA - Transfer and Start Address (W)"
-    mem.name_map[0xFF47] = lambda: "BGP - BG & Window Palette Data (R/W)"
-    mem.name_map[0xFF48] = lambda: "OBP0 - Object Palette 0 Data (R/W)"
-    mem.name_map[0xFF49] = lambda: "OBP1 - Object Palette 1 Data (R/W)"
-    mem.name_map[0xFF4A] = lambda: "WY - Window Y Position (R/W)"
-    mem.name_map[0xFF4B] = lambda: "WX - Window X Position (R/W)"
+    mem.name_map[0xFF40] = lambda: "LCDC (LCD Control) (R/W)"
+    mem.name_map[0xFF41] = lambda: "STAT (LCD Status) (R/W)"
+    mem.name_map[0xFF42] = lambda: "LCY (LCY Status) (R/W)"
+    mem.name_map[0xFF43] = lambda: "LCX (LCX Status) (R/W)"
+    mem.name_map[0xFF44] = lambda: "LY (LCD Current) Scanline (R)"
+    mem.name_map[0xFF45] = lambda: "LYC (LY Compare) (R/W)"
+    mem.name_map[0xFF46] = lambda: "DMA (Transfer and Start Address) (W)"
+    mem.name_map[0xFF47] = lambda: "BGP (BG & Window Palette Data) (R/W)"
+    mem.name_map[0xFF48] = lambda: "OBP0 (Object Palette 0 Data) (R/W)"
+    mem.name_map[0xFF49] = lambda: "OBP1 (Object Palette 1 Data) (R/W)"
+    mem.name_map[0xFF4A] = lambda: "WY (Window Y Position) (R/W)"
+    mem.name_map[0xFF4B] = lambda: "WX (Window X Position) (R/W)"
 
 def update():
     state.frame_cycle_count += z80.state.cycles_delta
@@ -300,7 +300,7 @@ def write_byte_0xFF40(addr, byte):
 # STAT – LCD Status (R/W)
 def write_byte_0xFF41(addr, byte):
     # bits 2-0 are readonly
-    mem.iomem[0x41] = (byte&0xF8)|(mem.iomem[0x41]&7)
+    mem.iomem[0x41] = (byte&0xF8)|(mem.iomem[0x41]&0x07)
 
 # SCY - Scroll Y
 def write_byte_0xFF42(addr, byte):    

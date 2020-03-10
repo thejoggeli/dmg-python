@@ -180,4 +180,11 @@ def read_word(addr):
 def write_word(addr, word):
     write_byte(addr+1, (word>>8)&0xFF)
     write_byte(addr, word&0xFF)
+    
+def read_word_silent(addr):
+    return (read_byte_silent(addr+1)<<8)|read_byte_silent(addr)
+
+def write_word_silent(addr, word):
+    write_byte_silent(addr+1, (word>>8)&0xFF)
+    write_byte_silent(addr, word&0xFF)
 
