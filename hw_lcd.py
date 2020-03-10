@@ -126,11 +126,13 @@ def update():
             state.scanline_count = 0      
             state.frame_cycle_count -= 70224
             # reset V-Blank interrupt flag
-            mem.iomem[0x0F] &= 0xFE 
-        if(state.scanline_count >= 144):
-            # scanline 144-153 (V-Blank)
+           #mem.iomem[0x0F] &= 0xFE             
+        elif(state.scanline_count == 144):
             # set V-Blank interrupt flag
-            mem.iomem[0x0F] |= 0x01 
+            mem.iomem[0x0F] |= 0x01     
+            # set STAT interrupt flag  
+            if(mem.iomem[0x41]&0x10):
+                mem.iomem[0x0F] |= 0x02 
         if(mem.iomem[0x41]&0x40 and state.scanline_count == mem.iomem[0x45]):
             mem.iomem[0x0F] |= 0x02 # set STAT interrupt flag
         # write new scanline to LY
@@ -145,19 +147,31 @@ def update():
 
     # set STAT mode
     if(mem.iomem[0x0F]&0x01):
-        mem.iomem[0x41] = (mem.iomem[0x41]&0xFC)|0x01 # mode 1 = V-Blank
-        if(mem.iomem[0x41]&0x10):
-            mem.iomem[0x0F] |= 0x02 # set STAT interrupt flag
+        # mode 1 = V-Blank
+        if(mem.iomem[0x41]&0x03 != 0x01):
+            # mode changed
+            mem.iomem[0x41] = (mem.iomem[0x41]&0xFC)|0x01 
     elif(state.scanline_cycle_count < 80):
-        mem.iomem[0x41] = (mem.iomem[0x41]&0xFC)|0x02 # mode 2 = searching OAM
-        if(mem.iomem[0x41]&0x20):
-            mem.iomem[0x0F] |= 0x02 # set STAT interrupt flag
+        # mode 2 = searching OAM
+        if(mem.iomem[0x41]&0x03 != 0x02):
+            # mode changed
+            mem.iomem[0x41] = (mem.iomem[0x41]&0xFC)|0x02 
+            # set STAT interrupt flag
+            if(mem.iomem[0x41]&0x20):
+                mem.iomem[0x0F] |= 0x02 
     elif(state.scanline_cycle_count < 160):
-        mem.iomem[0x41] = (mem.iomem[0x41]&0xFC)|0x03 # mode 3 = transfering data
-    else:   
-        mem.iomem[0x41] = (mem.iomem[0x41]&0xFC)|0x00 # mode 0 = H-Blank
-        if(mem.iomem[0x41]&0x80):
-            mem.iomem[0x0F] |= 0x02 # set STAT interrupt flag
+        # mode 3 = transfering data
+        if(mem.iomem[0x41]&0x03 != 0x03):
+            # mode changed
+            mem.iomem[0x41] = (mem.iomem[0x41]&0xFC)|0x03 
+    else: 
+        # mode 0 = H-Blank
+        if(mem.iomem[0x41]&0x03 != 0x00): 
+            # mode changed
+            mem.iomem[0x41] = (mem.iomem[0x41]&0xFC)|0x00 
+            # set STAT interrupt flag
+            if(mem.iomem[0x41]&0x80 and mem.iomem[0x41]&0x03 != 0x00):
+                mem.iomem[0x0F] |= 0x02
     
 def render():
 

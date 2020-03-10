@@ -50,12 +50,14 @@ def write_byte_0xFF00(addr, byte):
     mem.iomem[0x00] = (mem.iomem[0x00]&0xCF)|(byte&0x30)
     
 def press_btn(btn):
+    mem.iomem[0x0F] |= 0x10 # P1 interrupt
     state.btn_values &= RESET_MAP[btn] # reset bit
 
 def release_btn(btn):
     state.btn_values |= SET_MAP[btn] # set bit
 
 def press_dir(dir):
+    mem.iomem[0x0F] |= 0x10 # P1 interrupt
     state.dir_values &= RESET_MAP[dir] # reset bit
 
 def release_dir(dir):

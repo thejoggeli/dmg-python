@@ -1,8 +1,5 @@
 {
     "sdlboy_console_history": [
-        ">>> pc=02cd",
-        ">>> speed=0.1",
-        ">>> speed 0.1",
         ">>> speed 0.02",
         ">>> t=10",
         ">>> speed 1.0",
@@ -24,14 +21,17 @@
         ">>> reset",
         ">>> resetwasdwasdsdfsdwwwwwweweweweweweweew",
         ">>> speed 0.01",
-        ">>> speed 0.001",
         ">>> speed 0.0002",
         ">>> speed 0.0001",
         ">>> speed 0.00001",
         ">>> limit 1",
         ">>> limit 4",
+        ">>> limit 100",
+        ">>> speed 0.001",
+        ">>> limit 30",
         ">>> limit 10",
-        ">>> limit 100"
+        ">>> s+100",
+        ">>> s+1000"
     ],
     "sdlboy_window_h": 657,
     "sdlboy_window_w": 638,
