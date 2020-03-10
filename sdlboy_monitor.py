@@ -127,8 +127,8 @@ class Monitor:
     def resize(self):
         if(is_open):
             self.viewport.x = 0
-            self.viewport.y = 0
-            self.viewport.w = 220
+            self.viewport.y = 0            
+            self.viewport.w = self.font.char_width*15+8
             self.viewport.h = int(sdlboy_window.glob.window_rect.h)
         else:
             self.viewport.x = 0

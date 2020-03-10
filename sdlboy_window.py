@@ -85,8 +85,8 @@ def main():
     
     # text
     sdlboy_text.init(glob.renderer)    
-   #sdlboy_text.load_font("console", file="res/font.png", char_size=(7, 9))
-    sdlboy_text.load_font("console", file="res/font_large.png", char_size=(14, 18))
+    sdlboy_text.load_font("console", file="res/font.png", char_size=(7, 9))
+    #sdlboy_text.load_font("console", file="res/font_large.png", char_size=(14, 18))
            
     # sdlboy components
     sdlboy_input.init()
@@ -240,9 +240,9 @@ def handle_keydown_event(event):
             joy.press_dir(joy.DIR_LEFT)
         elif(key == 1073741903): # right
             joy.press_dir(joy.DIR_RIGHT)
-        elif(key == 8): # Backspace
+        elif(key == 115): # S
             joy.press_btn(joy.BTN_SELECT)
-        elif(key == 13): # D
+        elif(key == 100): # D
             joy.press_btn(joy.BTN_START)
         elif(key == 119): # W
             joy.press_btn(joy.BTN_A)
@@ -260,9 +260,9 @@ def handle_keyup_event(event):
         joy.release_dir(joy.DIR_LEFT)
     elif(key == 1073741903): # right
         joy.release_dir(joy.DIR_RIGHT)
-    elif(key == 8): # Backspace
+    elif(key == 115): # S
         joy.release_btn(joy.BTN_SELECT)
-    elif(key == 13): # Enter
+    elif(key == 100): # D
         joy.release_btn(joy.BTN_START)
     elif(key == 119): # W
         joy.release_btn(joy.BTN_A)
