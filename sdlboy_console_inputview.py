@@ -31,6 +31,8 @@ class Inputview(sdlboy_console_component.ConsoleComponent):
             value="PLAY MODE ENABLED (F3)",
             buffer_size=256
         )
+        self.line_height = self.font.char_height+4
+        self.line_offset = 1
         self.text.update()
         self.cursor_rect = sdl2.SDL_Rect(0, 0, 0, 0) 
         # load saved history
@@ -39,7 +41,7 @@ class Inputview(sdlboy_console_component.ConsoleComponent):
             self.prev_messages = saved_history
             self.prev_messages_ptr = len(self.prev_messages)-1    
     def on_update(self):
-        self.repaint()
+        self.set_render_required()
     def on_render(self):  
         if(sdlboy_console.allow_input):
             self.text_blocked.set_position(0, self.line_offset)

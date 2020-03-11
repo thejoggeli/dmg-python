@@ -4,18 +4,20 @@ import sdlboy_console
 import sdlboy_color
 
 class ConsoleComponent:
-    repaint_requested = False
+    render_requested = False
     viewport_texture = None
     viewport_local = None
     viewport_global_inner = None
     viewport_global_outer = None
     renderer = None
     bg = None
-    is_visible = True
+    is_visible = False
     padding_left = 0
     padding_right = 0
     padding_top = 0
     padding_bottom = 0
+    preferred_w = 0
+    preferred_h = 0
     def __init__(self):
         self.bg = sdlboy_color.Color(0, 0, 0, 0)
         self.renderer = sdlboy_window.glob.renderer
@@ -26,6 +28,7 @@ class ConsoleComponent:
     def set_visible(self, v):
         if(self.is_visible == v):
             return
+        self.is_visible = v
         if(not v):
             self.viewport_global_outer.x = 0
             self.viewport_global_outer.y = 0
@@ -39,20 +42,22 @@ class ConsoleComponent:
             self.viewport_local.y  = 0
             self.viewport_local.w  = 0
             self.viewport_local.h  = 0
-        self.is_visible = v
-        sdlboy_console.resize()
+            self.on_invisible()
+        else:
+            self.on_visible()        
+        self.set_resize_required()
     def update(self):
         self.on_update()
     def render(self):
-        if(self.repaint_requested):
-            # repaint texture
+        if(self.render_requested):
+            # render to texture
             prev_target = sdl2.SDL_GetRenderTarget(self.renderer)
             sdl2.SDL_SetRenderTarget(self.renderer, self.viewport_texture)
             sdl2.SDL_SetRenderDrawColor(self.renderer, 0, 0, 0, 0)
             sdl2.SDL_RenderClear(self.renderer)            
             self.on_render()
             sdl2.SDL_SetRenderTarget(self.renderer, prev_target)
-            self.repaint_requested = False
+            self.render_requested = False
         # render texture to screen
         if(self.bg.a > 0):
             sdl2.SDL_SetRenderDrawColor(self.renderer, self.bg.r, self.bg.g, self.bg.b, self.bg.a)
@@ -74,9 +79,7 @@ class ConsoleComponent:
         self.viewport_global_inner.h = self.viewport_global_outer.h - self.padding_top  - self.padding_bottom
         self.viewport_local.w = self.viewport_global_inner.w
         self.viewport_local.h = self.viewport_global_inner.h
-        self.repaint()
-    def repaint(self):
-        self.repaint_requested = True
+        self.set_render_required()
     def set_background(self, r, g, b, a):
         self.bg.set_components(r, g, b, a)
     def set_viewport(self, x, y, w, h):
@@ -104,13 +107,25 @@ class ConsoleComponent:
             self.viewport_local.h
         )        
         sdl2.SDL_SetTextureBlendMode(self.viewport_texture, sdl2.SDL_BLENDMODE_BLEND)
-        self.repaint_requested = True
+        self.render_requested = True
         self.on_resize()
-    def on_init():
+    def on_init(self):
         pass
-    def on_update():
+    def on_visible(self):
         pass
-    def on_render():
+    def on_invisible(self):
         pass
-    def on_resize():
+    def on_update(self):
+        pass
+    def on_render(self):
+        pass
+    def on_resize(self):
+        pass
+    def set_resize_required(self):
+        sdlboy_console.resize()
+    def set_render_required(self):
+        self.render_requested = True
+    def on_present_width(self, w):
+        pass
+    def on_present_height(self, h):
         pass

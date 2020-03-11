@@ -25,6 +25,8 @@ class Textview(sdlboy_console_component.ConsoleComponent):
                 buffer_size=256
             )
             self.lines[i] = line         
+        self.line_height = self.font.char_height+2
+        self.line_offset = 1
         self.print_line("type help for help")
     def on_update(self):
         pass
@@ -85,6 +87,6 @@ class Textview(sdlboy_console_component.ConsoleComponent):
         self.lines[self.line_ptr].text.set_color(255,255,255)
         self.lines[self.line_ptr].text.update()
         self.lines[self.line_ptr].bg = bg
-        self.repaint()
+        self.set_render_required()
         return self.lines[self.line_ptr]
     

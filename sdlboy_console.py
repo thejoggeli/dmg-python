@@ -33,7 +33,6 @@ textview = None
 inputview = None
 memview = None
 tileview = None
-topview = None
 
 input_handler = None
 
@@ -48,26 +47,25 @@ def init():
     monitor = sdlboy_console_monitor.Monitor()
     monitor.set_background(0, 0, 0, 127)
     monitor.set_padding(4,4,4,4)
+    monitor.set_visible(True)
     
     textview = sdlboy_console_textview.Textview()
     textview.line_height = textview.font.char_height+2
     textview.line_offset = 1
     textview.set_padding(0,4,0,4)
+    textview.set_visible(True)
     
     inputview = sdlboy_console_inputview.Inputview()
-    inputview.line_height = inputview.font.char_height+4
-    inputview.line_offset = 1
     inputview.set_padding(0,4,0,4)
+    inputview.set_visible(True)
     
     memview = sdlboy_console_memview.Memview()
     memview.set_background(0, 0, 0, 127)
-    memview.set_visible(False)
+    memview.set_padding(4,4,4,4)
     
     tileview = sdlboy_console_tileview.Tileview()    
     tileview.set_background(0, 0, 0, 127)
-    tileview.set_visible(False)
-    
-    set_topview(memview)
+    tileview.set_padding(4,2,4,4)
     
     input_handler = InputHandler()
     
@@ -85,7 +83,6 @@ def set_open(b):
         sdl2.SDL_SetRenderDrawBlendMode(glob.renderer, sdl2.SDL_BLENDMODE_BLEND)
         sdl2.SDL_StartTextInput();
         is_open = True
-        set_allow_input(False)
         dlog.enable.errors()
     else:   
         #close 
@@ -94,16 +91,6 @@ def set_open(b):
         dlog.enable.errors()
         set_allow_input(True)
         
-def set_topview(view):
-    global topview
-    if(topview == view):
-        return
-    if(topview != None):
-        topview.set_visible(False)
-    topview = view
-    if(topview != None):
-        topview.set_visible(True)
-
 def set_control(b):
     global has_control
     has_control = b
@@ -119,20 +106,22 @@ def update():
         inputview.update()
     if(textview.is_visible):
         textview.update()
-    if(topview != None and topview.is_visible):
-        topview.update()
+    if(memview.is_visible):
+        memview.update()
+    if(tileview.is_visible):
+        tileview.update()
     if(glob.resize_requested):
+        
+        # resize no longer needed
+        glob.resize_requested = False
+        
         window_vp    = sdlboy_window.glob.window_rect
         monitor_vp   = monitor.viewport_global_outer
         inputview_vp = inputview.viewport_global_outer
         textview_vp  = textview.viewport_global_outer
-        topview_vp   = None
-        
-        if(topview == None):
-            topview_vp = memview.viewport_global_outer
-        else:
-            topview_vp = topview.viewport_global_outer
-            
+        tileview_vp  = tileview.viewport_global_outer
+        memview_vp   = memview.viewport_global_outer
+                    
         if(monitor.is_visible):            
             x = 0
             y = 0
@@ -145,35 +134,33 @@ def update():
             x = monitor_vp.x + monitor_vp.w
             y = window_vp.h - inputview.line_height
             w = window_vp.w - monitor_vp.w
-            h = inputview.line_height        
+            h = inputview.line_height
             inputview.set_viewport(x, y, w, h)
-        
-        # resize memview
-        if(memview.is_visible):
-            x = monitor_vp.x + monitor_vp.w
-            y = 0
-            w = window_vp.w - monitor_vp.w
-            h = 200
-            memview.set_viewport(x, y, w, h)
         
         # resize tileview
         if(tileview.is_visible):
             x = monitor_vp.x + monitor_vp.w
-            y = window_vp.h - inputview.font.char_height - inputview.line_height
+            y = 0
             w = window_vp.w - monitor_vp.w
-            h = inputview.font.char_height + inputview.line_height    
+            tileview.on_present_width(w - tileview.padding_left - tileview.padding_right)
+            h = tileview.preferred_h + tileview.padding_top + tileview.padding_bottom
             tileview.set_viewport(x, y, w, h)
+        
+        # resize memview
+        if(memview.is_visible):
+            x = monitor_vp.x + monitor_vp.w
+            y = tileview_vp.y + tileview_vp.h
+            w = window_vp.w - monitor_vp.w
+            h = memview.preferred_h + memview.padding_top + memview.padding_bottom
+            memview.set_viewport(x, y, w, h)
         
         # resize textview
         if(textview.is_visible):
             x = monitor_vp.x + monitor_vp.w
-            y = topview_vp.y + topview_vp.h
+            y = tileview_vp.h + memview_vp.h
             w = window_vp.w - monitor_vp.w
-            h = window_vp.h - inputview_vp.h - topview_vp.h
+            h = window_vp.h - inputview_vp.h - memview_vp.h - tileview_vp.h
             textview.set_viewport(x, y, w, h)
-        
-        # resize no longer needed
-        glob.resize_requested = False
         
 def resize():
     glob.resize_requested = True
@@ -190,8 +177,10 @@ def render():
         textview.render()
     if(inputview.is_visible):
         inputview.render()
-    if(topview != None and topview.is_visible):
-        topview.render()
+    if(memview.is_visible):
+        memview.render()
+    if(tileview.is_visible):
+        tileview.render()
     
 def handle_event(event):
     global has_control       
@@ -221,7 +210,10 @@ def handle_event(event):
             inputview.clear()
         elif(key == 27):
             # ESC
-            set_topview(None)
+            if(memview.is_visible):
+                memview.set_visible(False)
+            elif(tileview.is_visible):
+                tileview.set_visible(False)
         elif(key == 1073741885):       
             # F4
             set_control(not has_control)
@@ -326,51 +318,23 @@ class InputHandler:
             return
         elif(user_input == "help"):
             textview.help()
+            return       
+        elif(user_input.startswith("tiles")):
+            tileview.set_visible(True)
+            resize()
             return
         elif(user_input.startswith("mem")):
-            if(log_free):
-                dlog.enable.errors()
-            self.print_spacer()
-            zeros = False
+            split = user_input.replace("mem", "").strip().split(" ")
+            zeroes = False
             if(user_input.strip().endswith("z")):
                 user_input = user_input.replace("z", "").strip()
-                zeros = True
-            
-            split = user_input.replace("mem", "").strip().split(" ")
+                zeroes = True
             start = int(split[0], 16)
-            start = start - start%16
-            end   = start+int(split[1], 16)
-            while(end%16 != 0):
-                end+=1
-            
-            # head
-            head = "MEM  |"
-            for i in range(0, 16):
-                head += "  {0:0{1}X} ".format(i, 1)
-            dlog.print_msg("SYS", head + "|")
-            textview.print_line(head + "|", bg=(0,0,0,127))
-    
-            dlog.print_msg("SYS", "".ljust(71, "-"))
-            textview.print_line("".ljust(71, "-"), bg=(0,0,0,127))
-            
-            # body
-            line = None
-            for addr in range(start, end):
-                if(addr%16==0):
-                    if(line):
-                        dlog.print_msg("SYS", line + "|")
-                        textview.print_line(line + "|", bg=(0,0,0,127))
-                    left = (addr&0xFFF0)
-                    line = "{0:0{1}X}".format(left, 4) + " |"
-                byte = mem.read_byte(addr)
-                if(zeros):
-                    line += " {0:0{1}X} ".format(byte, 2)               
-                else:
-                    line += " {0:0{1}X} ".format(byte, 2).replace("00", "  ") 
-            dlog.print_msg("SYS", line + "|")
-            textview.print_line(line + "|", bg=(0,0,0,127))
-            textview.print_line("".ljust(71, "-"), bg=(0,0,0,127))
-            self.print_spacer()
+            range   = int(split[1], 16)
+            memview.set_range(start, start+range)
+            memview.set_draw_zeroes(zeroes)
+            memview.set_visible(True)
+            resize()
             return
         elif(user_input.startswith("reset")):
             sdlboy_window.reset()

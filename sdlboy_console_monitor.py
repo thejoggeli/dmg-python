@@ -17,7 +17,6 @@ import util_code_loader as cld
 
 class Monitor(sdlboy_console_component.ConsoleComponent):
     font = None
-    preferred_w = 0
     monitor_ptr = 0
     monitor_texts = []
     line_spacing = 4
@@ -25,7 +24,7 @@ class Monitor(sdlboy_console_component.ConsoleComponent):
         self.font = sdlboy_text.get_font("console")
         self.preferred_w = self.font.char_width*15
     def on_update(self):
-        self.repaint()
+        self.set_render_required()
     def on_render(self):
         self.monitor_ptr = 0        
         self.monitor("FPS:" + str(sdlboy_time.fps))
