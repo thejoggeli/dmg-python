@@ -134,7 +134,7 @@ def main():
                 glob.vblank_occured = False
                 while(not glob.vblank_occured):
                     gameboy.tick()
-            lcd.render()
+        lcd.render()
                     
         # render
         sdl2.SDL_SetRenderDrawColor(glob.renderer, 0, 0, 0, 0xFF)

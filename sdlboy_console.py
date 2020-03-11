@@ -112,9 +112,6 @@ def update():
         tileview.update()
     if(glob.resize_requested):
         
-        # resize no longer needed
-        glob.resize_requested = False
-        
         window_vp    = sdlboy_window.glob.window_rect
         monitor_vp   = monitor.viewport_global_outer
         inputview_vp = inputview.viewport_global_outer
@@ -151,6 +148,7 @@ def update():
             x = monitor_vp.x + monitor_vp.w
             y = tileview_vp.y + tileview_vp.h
             w = window_vp.w - monitor_vp.w
+            memview.on_present_width(w - memview.padding_left - memview.padding_right)
             h = memview.preferred_h + memview.padding_top + memview.padding_bottom
             memview.set_viewport(x, y, w, h)
         
@@ -161,6 +159,9 @@ def update():
             w = window_vp.w - monitor_vp.w
             h = window_vp.h - inputview_vp.h - memview_vp.h - tileview_vp.h
             textview.set_viewport(x, y, w, h)
+        
+        # resize no longer needed
+        glob.resize_requested = False
         
 def resize():
     glob.resize_requested = True

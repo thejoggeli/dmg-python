@@ -22,7 +22,7 @@ class Tileview(sdlboy_console_component.ConsoleComponent):
     tiles_num_cols = 0
     tiles_scale = 0
     tiles_spacing = 0
-    last_update_time = 0
+    last_render_time = 0
     def on_init(self):
         self.tiles_color_map = [None]*4
         self.tiles_color_map[3] = Color(0x00, 0x00, 0x00)
@@ -34,10 +34,10 @@ class Tileview(sdlboy_console_component.ConsoleComponent):
             self.tiles_texture_rect = sdl2.SDL_Rect(0,0,0,0)
             self.tiles_texture_dst_rect = sdl2.SDL_Rect(0,0,0,0)       
     def on_update(self):
-        if(sdlboy_time.since_start - self.last_update_time > 0.25):
+        if(sdlboy_time.since_start - self.last_render_time > 0.25):
             self.set_render_required()        
-            self.last_update_time = sdlboy_time.since_start
     def on_render(self):        
+        self.last_render_time = sdlboy_time.since_start
         pixels = self.pixels
         color_map = self.tiles_color_map
         pattern_ptr = 0
@@ -108,8 +108,6 @@ class Tileview(sdlboy_console_component.ConsoleComponent):
             self.tiles_texture_rect.w,
             self.tiles_texture_rect.h
         )
-        self.set_resize_required()
-        self.set_render_required()
         self.preferred_h = self.tiles_texture_dst_rect.h
     def on_present_width(self, w):
         spacing = 1
@@ -117,8 +115,8 @@ class Tileview(sdlboy_console_component.ConsoleComponent):
         tile_width = (8+spacing)*scale
         try:
             cols = math.floor(w/tile_width)
+            cols = cols - (cols%8) # make cols multiple of 8 (round down)
             rows = math.ceil(512/cols)
-            self.set_tiles_dimensions(cols, rows, spacing, scale)
         except Exception as e:
             cols = 64
             rows = 8
