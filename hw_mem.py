@@ -90,8 +90,8 @@ def write_0xFF0F(addr, byte):
 def bios_read(addr):
     return bios[addr]
 def bios_write(addr, byte):
-    dlog.print_error("MEM", "can't write to bios")
-    pass
+    dlog.print_warning("MEM", "writing to bios")
+    bios[addr] = byte
 def bios_name():
     return "BIOS"
     

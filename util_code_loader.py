@@ -10,7 +10,7 @@ def load_binary_file(file):
 
 def load_into_memory(bytes, offset=0):
     for byte in bytes:
-        mem.write_byte(offset, byte, silent=True)
+        mem.write_byte(offset, byte)
         offset += 1
 
 def print_code(bytes, start_index=None, end_index=None):

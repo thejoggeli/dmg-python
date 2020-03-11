@@ -219,6 +219,7 @@ class State:
     time_passed = 0
     cycles_delta = 0
     halted = False
+    halt_bug = False
     stopped = False
     interrupt_master_enable = 0
     interrupt_master_enable_skip_one_cycle = 0
@@ -235,12 +236,6 @@ def init():
     pass
     
 def update():      
-
-    if(state.halted):
-        dlog.print_error("Z80", "halted behavior not implemented")
-        
-    if(state.stopped):
-        dlog.print_error("Z80", "stopped behavior not implemented")
     
     # print current cpu state
     if(dlog.enable.z80):
@@ -248,99 +243,133 @@ def update():
     
     state.instruction_location = reg.pc
         
-    execute_opcode = True
-        
-    if(state.interrupt_master_enable):
-        if(state.interrupt_master_enable_skip_one_cycle):
-            state.interrupt_master_enable_skip_one_cycle = 0
-        else:
-            # check if interrupt
-            if_flags = mem.read_byte(0xFF0F)
-            ie_flags = mem.read_byte(0xFFFF)
-            masked = if_flags&ie_flags
-            if(masked > 0):
-                state.interrupt_master_enable = 0    
-                interrupt_cycles = 0
-                if(state.halted):
-                    interrupt_cycles = 24
-                else:                    
-                    interrupt_cycles = 20  
-                # push pc on stack 
-                reg.sp -= 2; mem.write_word(reg.sp, reg.pc)              
-                # jump to vector
-                if(masked&0x01):
-                    # vertical blank             
-                    mem.write_byte(0xFF0F, if_flags&0x1E) # reset bit 0
+    if(state.stopped):  
+        if(dlog.enable.z80):  
+            dlog.print_msg("Z80", "STOP", cat="stop_mode")
+        joypad = mem.read_byte(0xFF00)
+        if(joypad&0x0F != 0xF):
+            if(dlog.enable.z80):
+                dlog.print_msg("Z80", "Leaving STOP mode", cat="stop_mode")
+            state.stopped = False
+        state.cycles_delta = 4
+    else:        
+        interrupted = False        
+        if(state.interrupt_master_enable):
+            if(state.interrupt_master_enable_skip_one_cycle):
+                state.interrupt_master_enable_skip_one_cycle = 0
+            else:
+                # check if interrupt
+                if_flags = mem.read_byte(0xFF0F)
+                ie_flags = mem.read_byte(0xFFFF)
+                masked = if_flags&ie_flags
+                if(masked > 0):
+                    state.interrupt_master_enable = 0    
+                    interrupt_cycles = 0
+                    if(state.halted):
+                        state.halted = False
+                        if(dlog.enable.z80):
+                            dlog.print_msg("Z80", "Leaving HALT mode with IME=1", cat="halt_mode")
+                        interrupt_cycles = 24
+                    else:                    
+                        interrupt_cycles = 20  
+                    # push pc on stack 
+                    reg.sp -= 2; mem.write_word(reg.sp, reg.pc)              
+                    # jump to vector
+                    if(masked&0x01):
+                        # vertical blank             
+                        mem.write_byte(0xFF0F, if_flags&0x1E) # reset bit 0
+                        if(dlog.enable.z80):
+                            dlog.print_msg("Z80", "Interrupt: V-Blank", cat="interrupt") 
+                        reg.pc = 0x0040
+                    elif(masked&0x02):
+                        # LCD STAT
+                        mem.write_byte(0xFF0F, if_flags&0x1D) # reset bit 1
+                        if(dlog.enable.z80):
+                            dlog.print_msg("Z80", "Interrupt: LCD STAT", cat="interrupt")
+                        reg.pc = 0x0048
+                    elif(masked&0x04):
+                        # timer
+                        mem.write_byte(0xFF0F, if_flags&0x1B) # reset bit 2
+                        if(dlog.enable.z80):
+                            dlog.print_msg("Z80", "Interrupt: Timer", cat="interrupt")
+                        reg.pc = 0x0050
+                    elif(masked&0x08):
+                        # timer
+                        mem.write_byte(0xFF0F, if_flags&0x17) # reset bit 3
+                        if(dlog.enable.z80):
+                            dlog.print_msg("Z80", "Interrupt: Serial", cat="interrupt")
+                        reg.pc = 0x0058
+                    elif(masked&0x10):
+                        # joypad
+                        mem.write_byte(0xFF0F, if_flags&0x0F) # reset bit 4
+                        if(dlog.enable.z80):
+                            dlog.print_msg("Z80", "Interrupt: Joypad", cat="interrupt")
+                        reg.pc = 0x0060
+                    else:
+                        dlog.print_error(
+                            "Z80", 
+                            "invalid interrupt: " +
+                            "IE=" + "%{0:0{1}b}".format(ie_flags,8) +
+                            " and " + 
+                            "IF=" + "%{0:0{1}b}".format(if_flags,8)
+                        )
+                    interrupted = True
+                    state.cycles_delta = interrupt_cycles
+                   #state.cycles_total += interrupt_cycles
+                   
+        if(not interrupted):        
+            if(state.halted):
+                if(dlog.enable.z80):
+                    dlog.print_msg("Z80", "HALT", cat="halt_mode")            
+                if_flags = mem.read_byte_silent(0xFF0F)
+                ie_flags = mem.read_byte_silent(0xFFFF)
+                if(if_flags&ie_flags&0x1F > 0):
                     if(dlog.enable.z80):
-                        dlog.print_msg("Z80", "vertical blank", cat="interrupt") 
-                    reg.pc = 0x0040
-                elif(masked&0x02):
-                    # LCD STAT
-                    mem.write_byte(0xFF0F, if_flags&0x1D) # reset bit 1
-                    if(dlog.enable.z80):
-                        dlog.print_msg("Z80", "LCD STAT", cat="interrupt")
-                    reg.pc = 0x0048
-                elif(masked&0x04):
-                    # timer
-                    mem.write_byte(0xFF0F, if_flags&0x1B) # reset bit 2
-                    if(dlog.enable.z80):
-                        dlog.print_msg("Z80", "timer", cat="interrupt")
-                    reg.pc = 0x0050
-                elif(masked&0x08):
-                    # timer
-                    mem.write_byte(0xFF0F, if_flags&0x17) # reset bit 3
-                    if(dlog.enable.z80):
-                        dlog.print_msg("Z80", "serial", cat="interrupt")
-                    reg.pc = 0x0058
-                else:  
-                    # joypad
-                    mem.write_byte(0xFF0F, if_flags&0x0F) # reset bit 4
-                    if(dlog.enable.z80):
-                        dlog.print_msg("Z80", "joypad", cat="interrupt")
-                    reg.pc = 0x0060
-                execute_opcode = False
-                state.cycles_delta = interrupt_cycles
-               #state.cycles_total += interrupt_cycles
-                
-    # fetch op code
-    if(execute_opcode):
-        op.address = reg.pc
-        byte = mem.read_byte(reg.pc); reg.pc += 1
-        if(byte == 0xCB):
-            op.prefix = 0xCB
-            op.code = mem.read_byte(reg.pc); reg.pc += 1
-            op.map = op_map_cbpref
-        elif(byte == 0xDD):
-            dlog.print_error("Z80", "0xDD prefix not implemented")
-            op.prefix = 0x00
-            op.code = 0x00
-            op.map = None
-        elif(byte == 0xED):
-            dlog.print_error("Z80", "0xED prefix not implemented")
-            op.prefix = 0x00
-            op.code = 0x00
-            op.map = None    
-        elif(byte == 0xFD):
-            dlog.print_error("Z80", "0xFD prefix not implemented")
-            op.prefix = 0x00
-            op.code = 0x00
-            op.map = None    
-        else:
-            op.prefix = 0x00
-            op.code = byte
-            op.map = op_map_nopref        
-        # wrap pc
-        if(reg.pc > 0xFFFF):
-            reg.pc &= 0xFFFF
-            dlog.print_error("Z80", "pc wrap in execute (what is actual behavior?)")        
-        # print opcode
-        if(dlog.enable.z80):
-            print_op()        
-        # execute opcode
-        op.map[op.code][0]()
-        state.cycles_delta = op.cycles
-       #state.cycles_total += op.cycles
-        
+                        dlog.print_msg("Z80", "Leaving HALT mode with IME=0", cat="halt_mode")
+                    state.halted = False
+                state.cycles_delta = 4
+            else:
+                # fetch op code
+                op.address = reg.pc
+                byte = mem.read_byte(reg.pc); reg.pc += 1
+                if(state.halt_bug):
+                    reg.pc -= 1
+                    state.halt_bug = False
+                if(byte == 0xCB):
+                    op.prefix = 0xCB
+                    op.code = mem.read_byte(reg.pc); reg.pc += 1
+                    op.map = op_map_cbpref
+                elif(byte == 0xDD):
+                    dlog.print_error("Z80", "0xDD prefix not implemented")
+                    op.prefix = 0x00
+                    op.code = 0x00
+                    op.map = None
+                elif(byte == 0xED):
+                    dlog.print_error("Z80", "0xED prefix not implemented")
+                    op.prefix = 0x00
+                    op.code = 0x00
+                    op.map = None    
+                elif(byte == 0xFD):
+                    dlog.print_error("Z80", "0xFD prefix not implemented")
+                    op.prefix = 0x00
+                    op.code = 0x00
+                    op.map = None    
+                else:
+                    op.prefix = 0x00
+                    op.code = byte
+                    op.map = op_map_nopref        
+                # wrap pc
+                if(reg.pc > 0xFFFF):
+                    reg.pc &= 0xFFFF
+                    dlog.print_error("Z80", "pc wrap in execute (what is actual behavior?)")        
+                # print opcode
+                if(dlog.enable.z80):
+                    print_op()        
+                # execute opcode
+                op.map[op.code][0]()
+                state.cycles_delta = op.cycles
+               #state.cycles_total += op.cycles
+               
     if(dlog.enable.z80):
         print_endst()
     
@@ -991,12 +1020,28 @@ def op_halt():
     # are enabled (EI).
     # Source: GBCPUman.pdf
     # TODO implement HALT bug
-    state.halted = True
+    if_flags = mem.read_byte_silent(0xFF0F)
+    ie_flags = mem.read_byte_silent(0xFFFF)
+    if(state.interrupt_master_enable == 1):
+        if(dlog.enable.z80):
+            dlog.print_msg("Z80", "Entering HALT with IME=1", cat="halt_mode")    
+        state.halted = True
+    else:
+        if(if_flags&ie_flags&0x1F == 0):        
+            if(dlog.enable.z80):
+                dlog.print_msg("Z80", "Entering HALT mode with IME=0", cat="halt_mode")    
+            state.halted = True
+        else:
+            if(dlog.enable.z80):
+                dlog.print_msg("Z80", "HALT bug", cat="halt_mode")
+            state.halt_bug = True      
     op.cycles = 4
     
 ### OP STOP ########################################################################
 def op_stop():
     state.stopped = True
+    if(dlog.enable.z80):
+        dlog.print_msg("Z80", "Entering STOP mode", cat="stop_mode")
     # Skip one byte because
     # https://stackoverflow.com/questions/41353869/length-of-instruction-ld-a-c-in-gameboy-z80-processor
     # There is a hardware bug on Gameboy Classic that causes 

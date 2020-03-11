@@ -1,4 +1,5 @@
 import util_dlog as dlog
+import util_code_loader as cld
 import hw_z80 as z80
 import hw_mem as mem
 import hw_lcd as lcd
@@ -35,7 +36,7 @@ def reset():
     car.map_memory()
     lcd.map_memory()
     vid.map_memory()
-    joy.map_memory()
+    joy.map_memory()    
     
 def tick():
     if(dlog.enable.lcd):

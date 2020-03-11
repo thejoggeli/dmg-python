@@ -43,6 +43,9 @@ def read_byte_0xFF00(addr):
     elif(byte&0x10 == 0):
         # read dir
         byte |= state.dir_values
+    else:
+        # read nothing
+        byte |= 0x0F
     return byte
 
 def write_byte_0xFF00(addr, byte):

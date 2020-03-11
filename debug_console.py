@@ -2,11 +2,13 @@ import time
 import hw_z80 as z80
 import hw_mem as mem
 import hw_lcd as lcd
+import hw_joypad as joy
 import hw_cartridge as car
 import hw_video as vid
 import hw_gameboy as gameboy
 import util_events as events
 import util_dlog as dlog
+import util_code_loader as cld
 
 gameboy.init()
 car.print_info()
@@ -15,7 +17,7 @@ quit = False
 steps = 0
 
 def print_spacer():
-    dlog.print_msg("SYS", "===========================================================================================================")
+    dlog.print_msg("SYS", "".ljust(86, "="))
 
 def do_loop():
     if(dlog.enable.sys):
@@ -45,8 +47,23 @@ def do_loop():
 # perf          perf
 
 print_spacer()
+
+bytes = [
+    0xF3, # DI
+    0xFB, # EI
+    0x76, # HALT
+    0x3e, 0x14, # LD a,0x14
+    0x3e, 0x14, # LD a,0x14
+    0x3e, 0x14, # LD a,0x14
+]
+#mem.write_byte(0xFF0F, 0x02)
+z80.reg.sp = 0xFFFF
+mem.write_byte(0xFFFF, 0x02)
+cld.load_into_memory(bytes, 0)
+print_spacer()
+
 while(not quit):
-    user_input = input("[ SYS ] >>> Command:\t")
+    user_input = input("[SYS] >>>> Command: ")
     dlog.enable.all();
     
     printPerformance = False
@@ -77,6 +94,8 @@ while(not quit):
         z80.print_state()
         print_spacer()
         continue
+    if(user_input.startswith("press")):
+        joy.press_btn(joy.BTN_START)
     if(user_input.startswith("rb")):
         split = user_input.split(" ")
         addr = int(split[1], 16)
@@ -156,7 +175,7 @@ while(not quit):
             target_pc = int(val.replace("=", ""), 16)
             while(z80.reg.pc != target_pc):
                 do_loop()    
-        print("[ SYS ] PC is now at " + "0x{0:0{1}X}".format(z80.reg.pc, 4))
+        print("[SYS] PC is now at " + "0x{0:0{1}X}".format(z80.reg.pc, 4))
     else:
         # loop for n steps
         steps = 1
