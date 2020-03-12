@@ -20,10 +20,16 @@ class Glob:
    #window_surface = None
     window_scale = 1
     window_rect = None
-    screen_texture = None
-    screen_rect_texture = None
-    screen_rect_src = None
-    screen_rect_dst = None
+    background_texture  = None
+    background_rect_tex  = None
+    background_rect_src = None
+    sprites_p0_texture  = None
+    sprites_p0_rect_tex = None
+    sprites_p0_rect_src = None
+    sprites_p1_texture  = None
+    sprites_p1_rect_tex = None
+    sprites_p1_rect_src = None
+    screen_rect = None
     exit_requested = False
     vblank_occured = False
     in_console = False
@@ -48,16 +54,11 @@ def main():
         
     # window rect
     glob.window_rect = sdl2.SDL_Rect(0, 0, 800, 600) 
-    
-    # screen rect
-    glob.screen_rect_texture = sdl2.SDL_Rect(0, 0, 256, 256)
-    glob.screen_rect_src     = sdl2.SDL_Rect(0, 0, lcd.WIDTH, lcd.HEIGHT)
-    glob.screen_rect_dst     = sdl2.SDL_Rect(0, 0, 0, 0)
-    
+        
     # window
     window_flags = 0
     window_flags |= sdl2.SDL_WINDOW_RESIZABLE
-    window_flags |= sdl2.SDL_WINDOW_SHOWN
+    # window_flags |= sdl2.SDL_WINDOW_SHOWN
     window_x = config.get("sdlboy_window_x", sdl2.SDL_WINDOWPOS_CENTERED)
     window_y = config.get("sdlboy_window_y", sdl2.SDL_WINDOWPOS_CENTERED)
     window_w = config.get("sdlboy_window_w", 640)
@@ -73,13 +74,39 @@ def main():
     renderer_flags = sdl2.SDL_RENDERER_ACCELERATED | sdl2.SDL_RENDERER_TARGETTEXTURE
     glob.renderer = sdl2.SDL_CreateRenderer(glob.window, -1, renderer_flags)
 
-    # screen texture    
-    glob.screen_texture = sdl2.SDL_CreateTexture(
+    glob.screen_rect = sdl2.SDL_Rect(0, 0, 0, 0)
+    
+    # background
+    glob.background_rect_tex = sdl2.SDL_Rect(0, 0, 256, 256)
+    glob.background_rect_src = sdl2.SDL_Rect(0, 0, 160, 144)
+    glob.background_texture = sdl2.SDL_CreateTexture(
         glob.renderer, 
         sdl2.SDL_PIXELFORMAT_RGBA8888, 
         sdl2.SDL_TEXTUREACCESS_STREAMING,
-        glob.screen_rect_texture.w,
-        glob.screen_rect_texture.h
+        glob.background_rect_tex.w,
+        glob.background_rect_tex.h,
+    )
+    
+    # sprites p0
+    glob.sprites_p0_rect_tex = sdl2.SDL_Rect(0, 0, 176, 176)
+    glob.sprites_p0_rect_src = sdl2.SDL_Rect(8, 16, 160, 144)
+    glob.sprites_p0_texture = sdl2.SDL_CreateTexture(
+        glob.renderer, 
+        sdl2.SDL_PIXELFORMAT_RGBA8888, 
+        sdl2.SDL_TEXTUREACCESS_STREAMING,
+        glob.sprites_p0_rect_tex.w,
+        glob.sprites_p0_rect_tex.h,
+    )
+    
+    # sprites p1
+    glob.sprites_p1_rect_tex = sdl2.SDL_Rect(0, 0, 176, 176)
+    glob.sprites_p1_rect_src = sdl2.SDL_Rect(8, 16, 160, 144)
+    glob.sprites_p1_texture = sdl2.SDL_CreateTexture(
+        glob.renderer, 
+        sdl2.SDL_PIXELFORMAT_RGBA8888, 
+        sdl2.SDL_TEXTUREACCESS_STREAMING,
+        glob.sprites_p1_rect_tex.w,
+        glob.sprites_p1_rect_tex.h,
     )
     
     # text
@@ -140,20 +167,48 @@ def main():
         sdl2.SDL_SetRenderDrawColor(glob.renderer, 0, 0, 0, 0xFF)
         sdl2.SDL_RenderClear(glob.renderer)
         sdl2.SDL_UpdateTexture(
-            glob.screen_texture, 
-            glob.screen_rect_texture,
-            lcd.pixels,
-            256*4
+            glob.background_texture, 
+            glob.background_rect_tex,
+            lcd.pixels_background,
+            glob.background_rect_tex.w*4
+            # TODO update visible pixels only?
         )
-        glob.screen_rect_src.x = mem.read_byte_silent(0xFF43)
-        glob.screen_rect_src.y = mem.read_byte_silent(0xFF42)
+        sdl2.SDL_UpdateTexture(
+            glob.sprites_p0_texture, 
+            glob.sprites_p0_rect_tex,
+            lcd.pixels_sprites_p0,
+            glob.sprites_p0_rect_tex.w*4
+            # TODO update visible pixels only?
+        )
+        sdl2.SDL_UpdateTexture(
+            glob.sprites_p1_texture, 
+            glob.sprites_p1_rect_tex,
+            lcd.pixels_sprites_p1,
+            glob.sprites_p1_rect_tex.w*4
+            # TODO update visible pixels only?
+        )
+        glob.background_rect_src.x = mem.read_byte_silent(0xFF43)
+        glob.background_rect_src.y = mem.read_byte_silent(0xFF42)
         sdl2.SDL_RenderCopy(
             glob.renderer, 
-            glob.screen_texture, 
-            glob.screen_rect_src, 
-            glob.screen_rect_dst
+            glob.background_texture, 
+            glob.background_rect_src, 
+            glob.screen_rect
         )
-                            
+        """
+        sdl2.SDL_RenderCopy(
+            glob.renderer, 
+            glob.sprites_p1_texture, 
+            glob.sprites_p1_rect_src, 
+            glob.screen_rect
+        )
+        sdl2.SDL_RenderCopy(
+            glob.renderer, 
+            glob.sprites_p0_texture, 
+            glob.sprites_p0_rect_src, 
+            glob.screen_rect
+        )
+        """
         """
         # window title
         title = b"Dot Matrix Game"
@@ -261,20 +316,20 @@ def on_window_resize():
     window_wf = float(glob.window_rect.w)
     window_hf = float(glob.window_rect.h)
     window_af = window_wf/window_hf
-    screen_wf = float(glob.screen_rect_src.w)
-    screen_hf = float(glob.screen_rect_src.h)
+    screen_wf = float(160)
+    screen_hf = float(144)
     screen_af = screen_wf/screen_hf
     
     if(window_af > screen_af):
-        glob.screen_rect_dst.h = glob.window_rect.h
-        glob.screen_rect_dst.w = int(window_hf*screen_af)
-        glob.screen_rect_dst.x = int(window_wf/2.0-window_hf*screen_af/2.0)
-        glob.screen_rect_dst.y = 0
+        glob.screen_rect.h = glob.window_rect.h
+        glob.screen_rect.w = int(window_hf*screen_af)
+        glob.screen_rect.x = int(window_wf/2.0-window_hf*screen_af/2.0)
+        glob.screen_rect.y = 0
     else:    
-        glob.screen_rect_dst.w = glob.window_rect.w
-        glob.screen_rect_dst.h = int(window_wf/screen_af)
-        glob.screen_rect_dst.x = 0
-        glob.screen_rect_dst.y = int(window_hf/2.0-window_wf/screen_af/2.0)
+        glob.screen_rect.w = glob.window_rect.w
+        glob.screen_rect.h = int(window_wf/screen_af)
+        glob.screen_rect.x = 0
+        glob.screen_rect.y = int(window_hf/2.0-window_wf/screen_af/2.0)
     if(sdlboy_console.is_open):
         sdlboy_console.resize()
     # save window position

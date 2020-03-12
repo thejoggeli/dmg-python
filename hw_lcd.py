@@ -16,7 +16,9 @@ class Color:
         self.a = a
         self.c_rgba = (ctypes.c_uint)((r<<24)|(r<<16)|(r<<8)|a)
         
-pixels = None
+pixels_sprites_p0 = None
+pixels_sprites_p1 = None
+pixels_background = None
 lcd_background_color = None
 sprite_color_palette = None
 sprite_color_map     = None
@@ -56,21 +58,24 @@ def init():
     bg_color_palette[0] = Color(0xFF, 0xFF, 0xFF)
     bg_color_map        = [None]*4
 
-    global pixels
-    pixels_inital = [0x808080FF]*(256*256)
-    pixels = ((ctypes.c_uint)*(256*256))(*pixels_inital)
-    set_pixel(  0,   0, 0xFF0000FF)
-    set_pixel(  1,   1, 0x00FF00FF)
-    set_pixel(  2,   2, 0x0000FFFF)
-    set_pixel(157,   0, 0x00000000)
-    set_pixel(158,   0, 0x00000000)
-    set_pixel(159,   1, 0xFFFFFFFF)
-    set_pixel(159,   2, 0xFFFFFFFF)
-    set_pixel(159, 143, 0x00FFFFFF)
-    set_pixel(158, 142, 0xFF00FFFF)
-    set_pixel(157, 141, 0xFFFF00FF)
+    global pixels_sprites_p0, pixels_sprites_p1, pixels_background
+    pixels_sprites_pn_inital = [0xFF0000]*(176*176)
+    pixels_background_inital = [0x00FF00]*(256*256)
+    pixels_sprites_p0 = ((ctypes.c_uint)*(176*176))(*pixels_sprites_pn_inital)
+    pixels_sprites_p1 = ((ctypes.c_uint)*(176*176))(*pixels_sprites_pn_inital)
+    pixels_background = ((ctypes.c_uint)*(256*256))(*pixels_background_inital)
+    set_pixel(pixels_background,   0,   0, 0xFF0000FF)
+    set_pixel(pixels_background,   1,   1, 0x00FF00FF)
+    set_pixel(pixels_background,   2,   2, 0x0000FFFF)
+    set_pixel(pixels_background, 157,   0, 0x00000000)
+    set_pixel(pixels_background, 158,   0, 0x00000000)
+    set_pixel(pixels_background, 159,   1, 0xFFFFFFFF)
+    set_pixel(pixels_background, 159,   2, 0xFFFFFFFF)
+    set_pixel(pixels_background, 159, 143, 0x00FFFFFF)
+    set_pixel(pixels_background, 158, 142, 0xFF00FFFF)
+    set_pixel(pixels_background, 157, 141, 0xFFFF00FF)
     
-def set_pixel(x, y, rgba):
+def set_pixel(pixels, x, y, rgba):
     pixels[y*256+x] = rgba
     
 def map_memory():
@@ -187,8 +192,12 @@ def render():
     
     # LCD operation is off
     if(lcdc_7 == 0):
-        for i in range(0, len(pixels)):
-            pixels[i] = lcd_background_color.c_rgba
+        for i in range(0, len(pixels_background)):
+            pixels_background[i] = lcd_background_color.c_rgba
+        return
+        for i in range(0, len(pixels_sprites_p0)):
+            pixels_sprites_p0[i] = lcd_background_color.c_rgba
+            pixels_sprites_p1[i] = lcd_background_color.c_rgba
         return
         
     # Background & Window Display
@@ -228,14 +237,14 @@ def render():
                 for i in range(0, 8):        
                     byte_1 = vid.videoram[bg_tile_data_ptr]       
                     byte_2 = vid.videoram[bg_tile_data_ptr+1]       
-                    pixels[pixel_index+0] = bg_color_map[((byte_2>>6)&0x2)|((byte_1>>7)&0x1)].c_rgba
-                    pixels[pixel_index+1] = bg_color_map[((byte_2>>5)&0x2)|((byte_1>>6)&0x1)].c_rgba
-                    pixels[pixel_index+2] = bg_color_map[((byte_2>>4)&0x2)|((byte_1>>5)&0x1)].c_rgba
-                    pixels[pixel_index+3] = bg_color_map[((byte_2>>3)&0x2)|((byte_1>>4)&0x1)].c_rgba
-                    pixels[pixel_index+4] = bg_color_map[((byte_2>>2)&0x2)|((byte_1>>3)&0x1)].c_rgba
-                    pixels[pixel_index+5] = bg_color_map[((byte_2>>1)&0x2)|((byte_1>>2)&0x1)].c_rgba
-                    pixels[pixel_index+6] = bg_color_map[((byte_2>>0)&0x2)|((byte_1>>1)&0x1)].c_rgba
-                    pixels[pixel_index+7] = bg_color_map[((byte_2<<1)&0x2)|((byte_1>>0)&0x1)].c_rgba
+                    pixels_background[pixel_index+0] = bg_color_map[((byte_2>>6)&0x2)|((byte_1>>7)&0x1)].c_rgba
+                    pixels_background[pixel_index+1] = bg_color_map[((byte_2>>5)&0x2)|((byte_1>>6)&0x1)].c_rgba
+                    pixels_background[pixel_index+2] = bg_color_map[((byte_2>>4)&0x2)|((byte_1>>5)&0x1)].c_rgba
+                    pixels_background[pixel_index+3] = bg_color_map[((byte_2>>3)&0x2)|((byte_1>>4)&0x1)].c_rgba
+                    pixels_background[pixel_index+4] = bg_color_map[((byte_2>>2)&0x2)|((byte_1>>3)&0x1)].c_rgba
+                    pixels_background[pixel_index+5] = bg_color_map[((byte_2>>1)&0x2)|((byte_1>>2)&0x1)].c_rgba
+                    pixels_background[pixel_index+6] = bg_color_map[((byte_2>>0)&0x2)|((byte_1>>1)&0x1)].c_rgba
+                    pixels_background[pixel_index+7] = bg_color_map[((byte_2<<1)&0x2)|((byte_1>>0)&0x1)].c_rgba
                     pixel_index += 256
                     bg_tile_data_ptr += 2                
                 # next tile
@@ -257,14 +266,14 @@ def render():
                 for i in range(0, 8):          
                     byte_1 = vid.videoram[bg_tile_data_ptr]       
                     byte_2 = vid.videoram[bg_tile_data_ptr+1]       
-                    pixels[pixel_index+0] = bg_color_map[((byte_2>>6)&0x2)|((byte_1>>7)&0x1)].c_rgba
-                    pixels[pixel_index+1] = bg_color_map[((byte_2>>5)&0x2)|((byte_1>>6)&0x1)].c_rgba
-                    pixels[pixel_index+2] = bg_color_map[((byte_2>>4)&0x2)|((byte_1>>5)&0x1)].c_rgba
-                    pixels[pixel_index+3] = bg_color_map[((byte_2>>3)&0x2)|((byte_1>>4)&0x1)].c_rgba
-                    pixels[pixel_index+4] = bg_color_map[((byte_2>>2)&0x2)|((byte_1>>3)&0x1)].c_rgba
-                    pixels[pixel_index+5] = bg_color_map[((byte_2>>1)&0x2)|((byte_1>>2)&0x1)].c_rgba
-                    pixels[pixel_index+6] = bg_color_map[((byte_2>>0)&0x2)|((byte_1>>1)&0x1)].c_rgba
-                    pixels[pixel_index+7] = bg_color_map[((byte_2<<1)&0x2)|((byte_1>>0)&0x1)].c_rgba
+                    pixels_background[pixel_index+0] = bg_color_map[((byte_2>>6)&0x2)|((byte_1>>7)&0x1)].c_rgba
+                    pixels_background[pixel_index+1] = bg_color_map[((byte_2>>5)&0x2)|((byte_1>>6)&0x1)].c_rgba
+                    pixels_background[pixel_index+2] = bg_color_map[((byte_2>>4)&0x2)|((byte_1>>5)&0x1)].c_rgba
+                    pixels_background[pixel_index+3] = bg_color_map[((byte_2>>3)&0x2)|((byte_1>>4)&0x1)].c_rgba
+                    pixels_background[pixel_index+4] = bg_color_map[((byte_2>>2)&0x2)|((byte_1>>3)&0x1)].c_rgba
+                    pixels_background[pixel_index+5] = bg_color_map[((byte_2>>1)&0x2)|((byte_1>>2)&0x1)].c_rgba
+                    pixels_background[pixel_index+6] = bg_color_map[((byte_2>>0)&0x2)|((byte_1>>1)&0x1)].c_rgba
+                    pixels_background[pixel_index+7] = bg_color_map[((byte_2<<1)&0x2)|((byte_1>>0)&0x1)].c_rgba
                     pixel_index += 256
                     bg_tile_data_ptr += 2                
                 # next tile
@@ -294,19 +303,19 @@ def render():
                 sprite_color_map[3] = sprite_color_palette[3]
                 # draw pattern
                 pattern_ptr = pattern*16
-                pixel_ptr = y*256+x
+                pixel_ptr = y*176+x
                 for i in range(0, 16):
                     byte_1 = vid.videoram[pattern_ptr]       
                     byte_2 = vid.videoram[pattern_ptr+1]       
-                    pixels[pixel_ptr+0] = sprite_color_map[((byte_2>>6)&0x2)|((byte_1>>7)&0x1)].c_rgba
-                    pixels[pixel_ptr+1] = sprite_color_map[((byte_2>>5)&0x2)|((byte_1>>6)&0x1)].c_rgba
-                    pixels[pixel_ptr+2] = sprite_color_map[((byte_2>>4)&0x2)|((byte_1>>5)&0x1)].c_rgba
-                    pixels[pixel_ptr+3] = sprite_color_map[((byte_2>>3)&0x2)|((byte_1>>4)&0x1)].c_rgba
-                    pixels[pixel_ptr+4] = sprite_color_map[((byte_2>>2)&0x2)|((byte_1>>3)&0x1)].c_rgba
-                    pixels[pixel_ptr+5] = sprite_color_map[((byte_2>>1)&0x2)|((byte_1>>2)&0x1)].c_rgba
-                    pixels[pixel_ptr+6] = sprite_color_map[((byte_2>>0)&0x2)|((byte_1>>1)&0x1)].c_rgba
-                    pixels[pixel_ptr+7] = sprite_color_map[((byte_2<<1)&0x2)|((byte_1>>0)&0x1)].c_rgba
-                    pixel_ptr += 256
+                    pixels_sprites_p0[pixel_ptr+0] = sprite_color_map[((byte_2>>6)&0x2)|((byte_1>>7)&0x1)].c_rgba
+                    pixels_sprites_p0[pixel_ptr+1] = sprite_color_map[((byte_2>>5)&0x2)|((byte_1>>6)&0x1)].c_rgba
+                    pixels_sprites_p0[pixel_ptr+2] = sprite_color_map[((byte_2>>4)&0x2)|((byte_1>>5)&0x1)].c_rgba
+                    pixels_sprites_p0[pixel_ptr+3] = sprite_color_map[((byte_2>>3)&0x2)|((byte_1>>4)&0x1)].c_rgba
+                    pixels_sprites_p0[pixel_ptr+4] = sprite_color_map[((byte_2>>2)&0x2)|((byte_1>>3)&0x1)].c_rgba
+                    pixels_sprites_p0[pixel_ptr+5] = sprite_color_map[((byte_2>>1)&0x2)|((byte_1>>2)&0x1)].c_rgba
+                    pixels_sprites_p0[pixel_ptr+6] = sprite_color_map[((byte_2>>0)&0x2)|((byte_1>>1)&0x1)].c_rgba
+                    pixels_sprites_p0[pixel_ptr+7] = sprite_color_map[((byte_2<<1)&0x2)|((byte_1>>0)&0x1)].c_rgba
+                    pixel_ptr += 176
                     pattern_ptr += 2
                 # increment for next sprite
                 spritemem_ptr += 4      
@@ -326,19 +335,19 @@ def render():
                 sprite_color_map[3] = sprite_color_palette[3]
                 # draw pattern
                 pattern_ptr = pattern*16
-                pixel_ptr = y*256+x
+                pixel_ptr = y*176+x
                 for i in range(0, 8):
                     byte_1 = vid.videoram[pattern_ptr]       
                     byte_2 = vid.videoram[pattern_ptr+1]       
-                    pixels[pixel_ptr+0] = sprite_color_map[((byte_2>>6)&0x2)|((byte_1>>7)&0x1)].c_rgba
-                    pixels[pixel_ptr+1] = sprite_color_map[((byte_2>>5)&0x2)|((byte_1>>6)&0x1)].c_rgba
-                    pixels[pixel_ptr+2] = sprite_color_map[((byte_2>>4)&0x2)|((byte_1>>5)&0x1)].c_rgba
-                    pixels[pixel_ptr+3] = sprite_color_map[((byte_2>>3)&0x2)|((byte_1>>4)&0x1)].c_rgba
-                    pixels[pixel_ptr+4] = sprite_color_map[((byte_2>>2)&0x2)|((byte_1>>3)&0x1)].c_rgba
-                    pixels[pixel_ptr+5] = sprite_color_map[((byte_2>>1)&0x2)|((byte_1>>2)&0x1)].c_rgba
-                    pixels[pixel_ptr+6] = sprite_color_map[((byte_2>>0)&0x2)|((byte_1>>1)&0x1)].c_rgba
-                    pixels[pixel_ptr+7] = sprite_color_map[((byte_2<<1)&0x2)|((byte_1>>0)&0x1)].c_rgba
-                    pixel_ptr += 256
+                    pixels_sprites_p0[pixel_ptr+0] = sprite_color_map[((byte_2>>6)&0x2)|((byte_1>>7)&0x1)].c_rgba
+                    pixels_sprites_p0[pixel_ptr+1] = sprite_color_map[((byte_2>>5)&0x2)|((byte_1>>6)&0x1)].c_rgba
+                    pixels_sprites_p0[pixel_ptr+2] = sprite_color_map[((byte_2>>4)&0x2)|((byte_1>>5)&0x1)].c_rgba
+                    pixels_sprites_p0[pixel_ptr+3] = sprite_color_map[((byte_2>>3)&0x2)|((byte_1>>4)&0x1)].c_rgba
+                    pixels_sprites_p0[pixel_ptr+4] = sprite_color_map[((byte_2>>2)&0x2)|((byte_1>>3)&0x1)].c_rgba
+                    pixels_sprites_p0[pixel_ptr+5] = sprite_color_map[((byte_2>>1)&0x2)|((byte_1>>2)&0x1)].c_rgba
+                    pixels_sprites_p0[pixel_ptr+6] = sprite_color_map[((byte_2>>0)&0x2)|((byte_1>>1)&0x1)].c_rgba
+                    pixels_sprites_p0[pixel_ptr+7] = sprite_color_map[((byte_2<<1)&0x2)|((byte_1>>0)&0x1)].c_rgba
+                    pixel_ptr += 176
                     pattern_ptr += 2
                 # increment for next sprite
                 spritemem_ptr += 4                    
