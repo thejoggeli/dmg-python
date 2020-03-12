@@ -16,14 +16,34 @@ class Color:
         self.a = a
         self.c_rgba = (ctypes.c_uint)((r<<24)|(r<<16)|(r<<8)|a)
         
-pixels_sprites_p0 = None
-pixels_sprites_p1 = None
 pixels_background = None
-lcd_background_color = None
+pixels_sprites_p1 = None
+pixels_sprites_p0 = None
+
+pixels_background_buffer = None
+pixels_sprites_p1_buffer = None
+pixels_sprites_p0_buffer = None
+pixels_screen_off_buffer = None
+
 sprite_color_palette = None
 sprite_color_map     = None
 bg_color_palette     = None
 bg_color_map         = None
+
+class DoubleBuffer():
+    first = None
+    second = None
+    current = None
+    def get(self):
+        return self.active
+    def swap(self):
+        if(self.current == self.first):
+            self.current = self.second
+            return self.current
+        else:
+            self.current = self.first
+            return self.current
+        
 
 class State:
     enabled = 1
@@ -31,6 +51,15 @@ class State:
     frame_cycle_count = 0
     scanline_cycle_count = 0
     scanline_count = 0
+    is_on = False    
+    lcdc_b7 = 0
+    lcdc_b6 = 0
+    lcdc_b5 = 0
+    lcdc_b4 = 0
+    lcdc_b3 = 0
+    lcdc_b2 = 0
+    lcdc_b1 = 0
+    lcdc_b0 = 0
 state = State()
 
 def init():
@@ -57,26 +86,50 @@ def init():
     bg_color_palette[1] = Color(0xAA, 0xAA, 0xAA)
     bg_color_palette[0] = Color(0xFF, 0xFF, 0xFF)
     bg_color_map        = [None]*4
-
-    global pixels_sprites_p0, pixels_sprites_p1, pixels_background
-    pixels_sprites_pn_inital = [0xFF0000]*(176*176)
-    pixels_background_inital = [0x00FF00]*(256*256)
-    pixels_sprites_p0 = ((ctypes.c_uint)*(176*176))(*pixels_sprites_pn_inital)
-    pixels_sprites_p1 = ((ctypes.c_uint)*(176*176))(*pixels_sprites_pn_inital)
-    pixels_background = ((ctypes.c_uint)*(256*256))(*pixels_background_inital)
-    set_pixel(pixels_background,   0,   0, 0xFF0000FF)
-    set_pixel(pixels_background,   1,   1, 0x00FF00FF)
-    set_pixel(pixels_background,   2,   2, 0x0000FFFF)
-    set_pixel(pixels_background, 157,   0, 0x00000000)
-    set_pixel(pixels_background, 158,   0, 0x00000000)
-    set_pixel(pixels_background, 159,   1, 0xFFFFFFFF)
-    set_pixel(pixels_background, 159,   2, 0xFFFFFFFF)
-    set_pixel(pixels_background, 159, 143, 0x00FFFFFF)
-    set_pixel(pixels_background, 158, 142, 0xFF00FFFF)
-    set_pixel(pixels_background, 157, 141, 0xFFFF00FF)
+    
+    # screen on buffers
+    global pixels_background_buffer
+    global pixels_sprites_p1_buffer
+    global pixels_sprites_p0_buffer
+    pixels_inital            = [0x808080FF]*(176*176)
+    pixels_background_buffer = DoubleBuffer()
+    pixels_sprites_p1_buffer = DoubleBuffer()
+    pixels_sprites_p0_buffer = DoubleBuffer()
+        
+    pixels_background_buffer.first = ((ctypes.c_uint)*(176*176))(*pixels_inital)
+    pixels_sprites_p1_buffer.first = ((ctypes.c_uint)*(176*176))(*pixels_inital)
+    pixels_sprites_p0_buffer.first = ((ctypes.c_uint)*(176*176))(*pixels_inital)
+        
+    pixels_background_buffer.second = ((ctypes.c_uint)*(176*176))(*pixels_inital)
+    pixels_sprites_p1_buffer.second = ((ctypes.c_uint)*(176*176))(*pixels_inital)
+    pixels_sprites_p0_buffer.second = ((ctypes.c_uint)*(176*176))(*pixels_inital)
+    
+    pixels_background_buffer.active = pixels_background_buffer.first
+    pixels_sprites_p1_buffer.active = pixels_sprites_p1_buffer.first
+    pixels_sprites_p0_buffer.active = pixels_sprites_p0_buffer.first
+    
+    set_pixel(pixels_background_buffer.first,   0,   0, 0xFF0000FF)
+    set_pixel(pixels_background_buffer.first,   1,   1, 0x00FF00FF)
+    set_pixel(pixels_background_buffer.first,   2,   2, 0x0000FFFF)
+    set_pixel(pixels_background_buffer.first, 157,   0, 0x00000000)
+    set_pixel(pixels_background_buffer.first, 158,   0, 0x00000000)
+    set_pixel(pixels_background_buffer.first, 159,   1, 0xFFFFFFFF)
+    set_pixel(pixels_background_buffer.first, 159,   2, 0xFFFFFFFF)
+    set_pixel(pixels_background_buffer.first, 159, 143, 0x00FFFFFF)
+    set_pixel(pixels_background_buffer.first, 158, 142, 0xFF00FFFF)
+    set_pixel(pixels_background_buffer.first, 157, 141, 0xFFFF00FF)
+    
+    # screen off buffer
+    global pixels_screen_off_buffer
+    pixels_inital            = [0xFFFFFFFF]*(176*176)
+    pixels_screen_off_buffer = ((ctypes.c_uint)*(176*176))(*pixels_inital)    
+    
+    pixels_background = pixels_screen_off_buffer
+    pixels_sprites_p1 = pixels_screen_off_buffer
+    pixels_sprites_p0 = pixels_screen_off_buffer
     
 def set_pixel(pixels, x, y, rgba):
-    pixels[y*256+x] = rgba
+    pixels[y*176+x] = rgba
     
 def map_memory():
     mem.write_map[0xFF40] = write_byte_0xFF40
@@ -171,14 +224,22 @@ def update():
             mem.iomem[0x41] = (mem.iomem[0x41]&0xFC)|0x03 
     else: 
         # mode 0 = H-Blank
+        render_scanline(state.scanline_count)
         if(mem.iomem[0x41]&0x03 != 0x00): 
             # mode changed
             mem.iomem[0x41] = (mem.iomem[0x41]&0xFC)|0x00 
             # set STAT interrupt flag
             if(mem.iomem[0x41]&0x80 and mem.iomem[0x41]&0x03 != 0x00):
                 mem.iomem[0x0F] |= 0x02
+
+def render_scanline(scanline):
+
     
+    pass
+
 def render():
+
+    return
 
     lcdc   = mem.iomem[0x40]
     lcdc_7 = (lcdc>>7)&0x01 # LCD Control Operation
@@ -386,6 +447,22 @@ def read_byte_debug(addr):
 # 1     OBJ (Sprite) Display        Off                 On
 # 0     BG & Window Display         Off                 On
 def write_byte_0xFF40(addr, byte):
+    state.lcdc_b7 = (byte>>7)&0x01 # LCD Control Operation
+    state.lcdc_b6 = (byte>>6)&0x01 # Window Tile Map Display Select
+    state.lcdc_b5 = (byte>>5)&0x01 
+    state.lcdc_b4 = (byte>>4)&0x01 # BG & Window Tile Data Select
+    state.lcdc_b3 = (byte>>3)&0x01 # BG Tile Map Display Select
+    state.lcdc_b2 = (byte>>2)&0x01 
+    state.lcdc_b1 = (byte>>1)&0x01 
+    state.lcdc_b0 = (byte>>0)&0x01 # BG & Window Display
+    if(state.lcdc_b7):        
+        pixels_background = pixels_background_buffer.active
+        pixels_sprites_p1 = pixels_sprites_p1_buffer.active
+        pixels_sprites_p0 = pixels_sprites_p0_buffer.active
+    else:
+        pixels_background = pixels_screen_off_buffer
+        pixels_sprites_p1 = pixels_screen_off_buffer
+        pixels_sprites_p0 = pixels_screen_off_buffer
     mem.iomem[0x40] = byte
 
 # STAT – LCD Status (R/W)
