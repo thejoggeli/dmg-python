@@ -6,6 +6,7 @@ import hw_lcd as lcd
 import hw_cartridge as car
 import hw_video as vid
 import hw_joypad as joy
+import hw_timer as tim
 import sys
 
 roms = {
@@ -33,10 +34,12 @@ def reset():
     mem.init()
     vid.init()
     joy.init()
+    tim.init()
     car.map_memory()
     lcd.map_memory()
     vid.map_memory()
     joy.map_memory()    
+    tim.map_memory()    
     
 def tick():
     if(dlog.enable.lcd):
@@ -46,6 +49,7 @@ def tick():
     z80.update()
     lcd.update()
     car.update()
+    tim.update()
 
 def run_for_n_seconds(n):
     # loop for N seconds

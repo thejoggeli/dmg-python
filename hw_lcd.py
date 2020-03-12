@@ -5,45 +5,35 @@ import hw_mem as mem
 import hw_video as vid
 import ctypes
 
-WIDTH = 160
-HEIGHT = 144
-
 class Color:
     def __init__(self, r, g, b, a=255):
         self.r = r
         self.g = g
         self.b = b
         self.a = a
-        self.c_rgba = (ctypes.c_uint)((r<<24)|(r<<16)|(r<<8)|a)
-        
-pixels_background = None
-pixels_sprites_p1 = None
-pixels_sprites_p0 = None
+        self.c_argb = (ctypes.c_uint)((a<<24)|(r<<16)|(g<<8)|b)
 
-pixels_background_buffer = None
-pixels_sprites_p1_buffer = None
-pixels_sprites_p0_buffer = None
-pixels_screen_off_buffer = None
+pixels_background_back = None
+pixels_sprites_p1_back = None
+pixels_sprites_p0_back = None
 
-sprite_color_palette = None
-sprite_color_map     = None
-bg_color_palette     = None
-bg_color_map         = None
+pixels_background_front = None
+pixels_sprites_p1_front = None
+pixels_sprites_p0_front = None
 
-class DoubleBuffer():
-    first = None
-    second = None
-    current = None
-    def get(self):
-        return self.active
-    def swap(self):
-        if(self.current == self.first):
-            self.current = self.second
-            return self.current
-        else:
-            self.current = self.first
-            return self.current
-        
+color_t = None # transparent
+color_0 = None # lightest
+color_1 = None # light
+color_2 = None # dark
+color_3 = None # darkest
+
+color_palette_background = None
+color_palette_sprites_p1 = None
+color_palette_sprites_p0 = None
+
+color_map_background = None
+color_map_sprites_p1 = None
+color_map_sprites_p0 = None
 
 class State:
     enabled = 1
@@ -59,77 +49,60 @@ class State:
     lcdc_b3 = 0
     lcdc_b2 = 0
     lcdc_b1 = 0
-    lcdc_b0 = 0
-state = State()
+    lcdc_b0 = 0    
+    background_tile_map_offset = 0x1800
+    
+state = None
 
 def init():
 
     global state
     state = State()
     
-    global lcd_background_color
-    global sprite_color_palette, sprite_color_map
-    global bg_color_palette, bg_color_map
-    
-    lcd_background_color = Color(0xFF, 0xFF, 0xFF)
-    
-    sprite_color_palette    = [None]*4
-    sprite_color_palette[3] = Color(0x00, 0x00, 0x00)
-    sprite_color_palette[2] = Color(0x55, 0x55, 0x55)
-    sprite_color_palette[1] = Color(0xAA, 0xAA, 0xAA)
-    sprite_color_palette[0] = Color(0xFF, 0xFF, 0xFF)
-    sprite_color_map        = [None]*4
-    
-    bg_color_palette    = [None]*4
-    bg_color_palette[3] = Color(0x00, 0x00, 0x00)
-    bg_color_palette[2] = Color(0x55, 0x55, 0x55)
-    bg_color_palette[1] = Color(0xAA, 0xAA, 0xAA)
-    bg_color_palette[0] = Color(0xFF, 0xFF, 0xFF)
-    bg_color_map        = [None]*4
-    
+    global color_t, color_0, color_1, color_2, color_3    
+    global color_palette_background, color_map_background
+    global color_palette_sprites_p1, color_map_sprites_p1
+    global color_palette_sprites_p0, color_map_sprites_p0    
+    color_t = Color(0, 0, 0, 0)
+    color_0 = Color(0xFF, 0xFF, 0xFF, 255)
+    color_1 = Color(0xAA, 0xAA, 0xAA, 255)
+    color_2 = Color(0x55, 0x55, 0x55, 255)
+    color_3 = Color(0x00, 0x00, 0x00, 255)      
+    color_palette_background = [color_0, color_1, color_2, color_3]
+    color_palette_sprites_p1 = [color_0, color_1, color_2, color_3]
+    color_palette_sprites_p0 = [color_t, color_1, color_2, color_3]     
+    color_map_background     = [color_0, color_0, color_0, color_0]
+    color_map_sprites_p1     = [color_0, color_0, color_0, color_0]
+    color_map_sprites_p0     = [color_t, color_0, color_0, color_0]
+        
     # screen on buffers
-    global pixels_background_buffer
-    global pixels_sprites_p1_buffer
-    global pixels_sprites_p0_buffer
-    pixels_inital            = [0x808080FF]*(176*176)
-    pixels_background_buffer = DoubleBuffer()
-    pixels_sprites_p1_buffer = DoubleBuffer()
-    pixels_sprites_p0_buffer = DoubleBuffer()
-        
-    pixels_background_buffer.first = ((ctypes.c_uint)*(176*176))(*pixels_inital)
-    pixels_sprites_p1_buffer.first = ((ctypes.c_uint)*(176*176))(*pixels_inital)
-    pixels_sprites_p0_buffer.first = ((ctypes.c_uint)*(176*176))(*pixels_inital)
-        
-    pixels_background_buffer.second = ((ctypes.c_uint)*(176*176))(*pixels_inital)
-    pixels_sprites_p1_buffer.second = ((ctypes.c_uint)*(176*176))(*pixels_inital)
-    pixels_sprites_p0_buffer.second = ((ctypes.c_uint)*(176*176))(*pixels_inital)
+    global pixels_background_back, pixels_background_front
+    global pixels_sprites_p1_back, pixels_sprites_p1_front
+    global pixels_sprites_p0_back, pixels_sprites_p0_front
+    pixels_inital = [0]*(176*176)   
+    pixels_background_front = ((ctypes.c_uint)*(176*176))(*pixels_inital)
+    pixels_sprites_p1_front = ((ctypes.c_uint)*(176*176))(*pixels_inital)
+    pixels_sprites_p0_front = ((ctypes.c_uint)*(176*176))(*pixels_inital)        
+    pixels_background_back  = ((ctypes.c_uint)*(176*176))(*pixels_inital)
+    pixels_sprites_p1_back  = ((ctypes.c_uint)*(176*176))(*pixels_inital)
+    pixels_sprites_p0_back  = ((ctypes.c_uint)*(176*176))(*pixels_inital)
     
-    pixels_background_buffer.active = pixels_background_buffer.first
-    pixels_sprites_p1_buffer.active = pixels_sprites_p1_buffer.first
-    pixels_sprites_p0_buffer.active = pixels_sprites_p0_buffer.first
+    set_pixel(pixels_background_front,   0,   0, 0xFF0000FF)
+    set_pixel(pixels_background_front,   1,   1, 0x00FF00FF)
+    set_pixel(pixels_background_front,   2,   2, 0x0000FFFF)
+    set_pixel(pixels_background_front, 157,   0, 0x00000000)
+    set_pixel(pixels_background_front, 158,   0, 0x00000000)
+    set_pixel(pixels_background_front, 159,   1, 0xFFFFFFFF)
+    set_pixel(pixels_background_front, 159,   2, 0xFFFFFFFF)
+    set_pixel(pixels_background_front, 159, 143, 0x00FFFFFF)
+    set_pixel(pixels_background_front, 158, 142, 0xFF00FFFF)
+    set_pixel(pixels_background_front, 157, 141, 0xFFFF00FF)
     
-    set_pixel(pixels_background_buffer.first,   0,   0, 0xFF0000FF)
-    set_pixel(pixels_background_buffer.first,   1,   1, 0x00FF00FF)
-    set_pixel(pixels_background_buffer.first,   2,   2, 0x0000FFFF)
-    set_pixel(pixels_background_buffer.first, 157,   0, 0x00000000)
-    set_pixel(pixels_background_buffer.first, 158,   0, 0x00000000)
-    set_pixel(pixels_background_buffer.first, 159,   1, 0xFFFFFFFF)
-    set_pixel(pixels_background_buffer.first, 159,   2, 0xFFFFFFFF)
-    set_pixel(pixels_background_buffer.first, 159, 143, 0x00FFFFFF)
-    set_pixel(pixels_background_buffer.first, 158, 142, 0xFF00FFFF)
-    set_pixel(pixels_background_buffer.first, 157, 141, 0xFFFF00FF)
-    
-    # screen off buffer
-    global pixels_screen_off_buffer
-    pixels_inital            = [0xFFFFFFFF]*(176*176)
-    pixels_screen_off_buffer = ((ctypes.c_uint)*(176*176))(*pixels_inital)    
-    
-    pixels_background = pixels_screen_off_buffer
-    pixels_sprites_p1 = pixels_screen_off_buffer
-    pixels_sprites_p0 = pixels_screen_off_buffer
-    
+    # TODO possible memory leak
+    # do ctypes.c_uint arrays need to be deleted manually on reset?
+
 def set_pixel(pixels, x, y, rgba):
-    pixels[y*176+x] = rgba
+    pixels[(y+16)*176+x+8] = rgba
     
 def map_memory():
     mem.write_map[0xFF40] = write_byte_0xFF40
@@ -172,6 +145,9 @@ def map_memory():
     mem.name_map[0xFF4B] = lambda: "WX (Window X Position) (R/W)"
 
 def update():
+    global pixels_background_back, pixels_background_front
+    global pixels_sprites_p1_back, pixels_sprites_p1_front
+    global pixels_sprites_p0_back, pixels_sprites_p0_front
     state.frame_cycle_count += z80.state.cycles_delta
     state.scanline_cycle_count += z80.state.cycles_delta
         
@@ -183,8 +159,19 @@ def update():
         if(state.scanline_count == 154):
             state.scanline_count = 0      
             state.frame_cycle_count -= 70224
+            render_sprites()
             # reset V-Blank interrupt flag
-           #mem.iomem[0x0F] &= 0xFE             
+           #mem.iomem[0x0F] &= 0xFE       
+            # swap buffers
+            temp = pixels_background_back
+            pixels_background_back = pixels_background_front
+            pixels_background_front = temp
+            temp = pixels_sprites_p1_back
+            pixels_sprites_p1_back = pixels_sprites_p1_front
+            pixels_sprites_p1_front = temp
+            temp = pixels_sprites_p0_back
+            pixels_sprites_p0_back = pixels_sprites_p0_front
+            pixels_sprites_p0_front = temp
         elif(state.scanline_count == 144):
             # set V-Blank interrupt flag
             mem.iomem[0x0F] |= 0x01     
@@ -204,7 +191,7 @@ def update():
             mem.iomem[0x41] &= 0xFB # reset bit 2
 
     # set STAT mode
-    if(mem.iomem[0x0F]&0x01):
+    if(state.scanline_count >= 144):
         # mode 1 = V-Blank
         if(mem.iomem[0x41]&0x03 != 0x01):
             # mode changed
@@ -224,192 +211,100 @@ def update():
             mem.iomem[0x41] = (mem.iomem[0x41]&0xFC)|0x03 
     else: 
         # mode 0 = H-Blank
-        render_scanline(state.scanline_count)
         if(mem.iomem[0x41]&0x03 != 0x00): 
             # mode changed
+            render_scanline(state.scanline_count)
             mem.iomem[0x41] = (mem.iomem[0x41]&0xFC)|0x00 
             # set STAT interrupt flag
             if(mem.iomem[0x41]&0x80 and mem.iomem[0x41]&0x03 != 0x00):
                 mem.iomem[0x0F] |= 0x02
 
 def render_scanline(scanline):
-
-    
-    pass
-
-def render():
-
-    return
-
-    lcdc   = mem.iomem[0x40]
-    lcdc_7 = (lcdc>>7)&0x01 # LCD Control Operation
-    lcdc_6 = (lcdc>>6)&0x01 # Window Tile Map Display Select
-    lcdc_5 = (lcdc>>5)&0x01 
-    lcdc_4 = (lcdc>>4)&0x01 # BG & Window Tile Data Select
-    lcdc_3 = (lcdc>>3)&0x01 # BG Tile Map Display Select
-    lcdc_2 = (lcdc>>2)&0x01 
-    lcdc_1 = (lcdc>>1)&0x01 
-    lcdc_0 = (lcdc>>0)&0x01 # BG & Window Display
-    
-    # LCD operation is off
-    if(lcdc_7 == 0):
-        for i in range(0, len(pixels_background)):
-            pixels_background[i] = lcd_background_color.c_rgba
-        return
-        for i in range(0, len(pixels_sprites_p0)):
-            pixels_sprites_p0[i] = lcd_background_color.c_rgba
-            pixels_sprites_p1[i] = lcd_background_color.c_rgba
-        return
-        
     # Background & Window Display
-    if(lcdc_0 == 1):
-        # BG & Window Palette Data
-        bgp = mem.iomem[0x47]        
-        bg_color_map[3] = bg_color_palette[(bgp>>6)&0x3]
-        bg_color_map[2] = bg_color_palette[(bgp>>4)&0x3]
-        bg_color_map[1] = bg_color_palette[(bgp>>2)&0x3]
-        bg_color_map[0] = bg_color_palette[(bgp>>0)&0x3]
-                
-        # BG Tile Map Display Select
-        bg_tile_map_ptr_start = 0
-        bg_tile_map_ptr_end   = 0 
-        if(lcdc_3 == 0):
-            # 0x9800-0x9BFF
-            bg_tile_map_ptr_start = 0x9800-0x8000
-            bg_tile_map_ptr_end   = 0x9C00-0x8000
-        else: 
-            # 0x9C00-0x9FFF
-            bg_tile_map_ptr_start = 0x9C00-0x8000
-            bg_tile_map_ptr_end   = 0xA000-0x8000
-                
-        # BG & Window Tile Data Select
-        if(lcdc_4 == 0):
-            # 0x8800-0x97FF with signed offset
-            tile_x_index = 0
-            pixel_index_offset = 0            
-            for bg_tile_map_ptr in range(bg_tile_map_ptr_start, bg_tile_map_ptr_end):
-                # find tile data
-                bg_tile_data_ptr = vid.videoram[bg_tile_map_ptr]            
-                if(bg_tile_data_ptr > 127):
-                    bg_tile_data_ptr -= 256
-                bg_tile_data_ptr = bg_tile_data_ptr*16 + 0x1000
-                # draw tile
-                pixel_index = pixel_index_offset
-                for i in range(0, 8):        
-                    byte_1 = vid.videoram[bg_tile_data_ptr]       
-                    byte_2 = vid.videoram[bg_tile_data_ptr+1]       
-                    pixels_background[pixel_index+0] = bg_color_map[((byte_2>>6)&0x2)|((byte_1>>7)&0x1)].c_rgba
-                    pixels_background[pixel_index+1] = bg_color_map[((byte_2>>5)&0x2)|((byte_1>>6)&0x1)].c_rgba
-                    pixels_background[pixel_index+2] = bg_color_map[((byte_2>>4)&0x2)|((byte_1>>5)&0x1)].c_rgba
-                    pixels_background[pixel_index+3] = bg_color_map[((byte_2>>3)&0x2)|((byte_1>>4)&0x1)].c_rgba
-                    pixels_background[pixel_index+4] = bg_color_map[((byte_2>>2)&0x2)|((byte_1>>3)&0x1)].c_rgba
-                    pixels_background[pixel_index+5] = bg_color_map[((byte_2>>1)&0x2)|((byte_1>>2)&0x1)].c_rgba
-                    pixels_background[pixel_index+6] = bg_color_map[((byte_2>>0)&0x2)|((byte_1>>1)&0x1)].c_rgba
-                    pixels_background[pixel_index+7] = bg_color_map[((byte_2<<1)&0x2)|((byte_1>>0)&0x1)].c_rgba
-                    pixel_index += 256
-                    bg_tile_data_ptr += 2                
-                # next tile
-                tile_x_index += 1
-                if(tile_x_index == 32):
-                    tile_x_index = 0
-                    pixel_index_offset += (256*7+8)
-                else:
-                    pixel_index_offset += 8         
+    if(state.lcdc_b0 == 1):
+        scroll_y = mem.iomem[0x42]
+        scroll_x = mem.iomem[0x43]
+        tilemap_ptr = int(scroll_x/8) + 32*(int((scanline+scroll_y)/8)) + state.background_tile_map_offset
+        pixel_ptr = 176*(16+scanline)+8 - scroll_x%8
+        pixel_ptr_end = 176*(16+scanline) + 168
+        pattern_row = (scanline+scroll_y)%8
+        tilemap_ptr_wrap = (tilemap_ptr+32)-(tilemap_ptr%32) # make end multiple of 32 (round up)
+        if(state.lcdc_b4 == 0):
+            while(pixel_ptr < pixel_ptr_end):
+                pattern_ptr = vid.videoram[tilemap_ptr]
+                if(pattern_ptr > 127):
+                    pattern_ptr -= 256
+                pattern_ptr = pattern_ptr*16 + 2*pattern_row + 0x1000 
+                byte_1 = vid.videoram[pattern_ptr]       
+                byte_2 = vid.videoram[pattern_ptr+1]   
+                pixels_background_back[pixel_ptr+0] = color_map_background[((byte_2>>6)&0x2)|((byte_1>>7)&0x1)].c_argb
+                pixels_background_back[pixel_ptr+1] = color_map_background[((byte_2>>5)&0x2)|((byte_1>>6)&0x1)].c_argb
+                pixels_background_back[pixel_ptr+2] = color_map_background[((byte_2>>4)&0x2)|((byte_1>>5)&0x1)].c_argb
+                pixels_background_back[pixel_ptr+3] = color_map_background[((byte_2>>3)&0x2)|((byte_1>>4)&0x1)].c_argb
+                pixels_background_back[pixel_ptr+4] = color_map_background[((byte_2>>2)&0x2)|((byte_1>>3)&0x1)].c_argb
+                pixels_background_back[pixel_ptr+5] = color_map_background[((byte_2>>1)&0x2)|((byte_1>>2)&0x1)].c_argb
+                pixels_background_back[pixel_ptr+6] = color_map_background[((byte_2>>0)&0x2)|((byte_1>>1)&0x1)].c_argb
+                pixels_background_back[pixel_ptr+7] = color_map_background[((byte_2<<1)&0x2)|((byte_1>>0)&0x1)].c_argb
+                pixel_ptr += 8
+                tilemap_ptr += 1
+                if(tilemap_ptr == tilemap_ptr_wrap):
+                    tilemap_ptr -= 32
         else:
-            # 0x8000-0x8FFF with unsigned offset
-            tile_x_index = 0
-            pixel_index_offset = 0            
-            for bg_tile_map_ptr in range(bg_tile_map_ptr_start, bg_tile_map_ptr_end):
-                # find tile data
-                bg_tile_data_ptr = vid.videoram[bg_tile_map_ptr]*16
-                # draw tile
-                pixel_index = pixel_index_offset
-                for i in range(0, 8):          
-                    byte_1 = vid.videoram[bg_tile_data_ptr]       
-                    byte_2 = vid.videoram[bg_tile_data_ptr+1]       
-                    pixels_background[pixel_index+0] = bg_color_map[((byte_2>>6)&0x2)|((byte_1>>7)&0x1)].c_rgba
-                    pixels_background[pixel_index+1] = bg_color_map[((byte_2>>5)&0x2)|((byte_1>>6)&0x1)].c_rgba
-                    pixels_background[pixel_index+2] = bg_color_map[((byte_2>>4)&0x2)|((byte_1>>5)&0x1)].c_rgba
-                    pixels_background[pixel_index+3] = bg_color_map[((byte_2>>3)&0x2)|((byte_1>>4)&0x1)].c_rgba
-                    pixels_background[pixel_index+4] = bg_color_map[((byte_2>>2)&0x2)|((byte_1>>3)&0x1)].c_rgba
-                    pixels_background[pixel_index+5] = bg_color_map[((byte_2>>1)&0x2)|((byte_1>>2)&0x1)].c_rgba
-                    pixels_background[pixel_index+6] = bg_color_map[((byte_2>>0)&0x2)|((byte_1>>1)&0x1)].c_rgba
-                    pixels_background[pixel_index+7] = bg_color_map[((byte_2<<1)&0x2)|((byte_1>>0)&0x1)].c_rgba
-                    pixel_index += 256
-                    bg_tile_data_ptr += 2                
-                # next tile
-                tile_x_index += 1
-                if(tile_x_index == 32):
-                    tile_x_index = 0
-                    pixel_index_offset += (256*7+8)
-                else:
-                    pixel_index_offset += 8
-                    
+            while(pixel_ptr < pixel_ptr_end):     
+                pattern_ptr = vid.videoram[tilemap_ptr]*16 + 2*pattern_row   
+                byte_1 = vid.videoram[pattern_ptr]       
+                byte_2 = vid.videoram[pattern_ptr+1]   
+                pixels_background_back[pixel_ptr+0] = color_map_background[((byte_2>>6)&0x2)|((byte_1>>7)&0x1)].c_argb
+                pixels_background_back[pixel_ptr+1] = color_map_background[((byte_2>>5)&0x2)|((byte_1>>6)&0x1)].c_argb
+                pixels_background_back[pixel_ptr+2] = color_map_background[((byte_2>>4)&0x2)|((byte_1>>5)&0x1)].c_argb
+                pixels_background_back[pixel_ptr+3] = color_map_background[((byte_2>>3)&0x2)|((byte_1>>4)&0x1)].c_argb
+                pixels_background_back[pixel_ptr+4] = color_map_background[((byte_2>>2)&0x2)|((byte_1>>3)&0x1)].c_argb
+                pixels_background_back[pixel_ptr+5] = color_map_background[((byte_2>>1)&0x2)|((byte_1>>2)&0x1)].c_argb
+                pixels_background_back[pixel_ptr+6] = color_map_background[((byte_2>>0)&0x2)|((byte_1>>1)&0x1)].c_argb
+                pixels_background_back[pixel_ptr+7] = color_map_background[((byte_2<<1)&0x2)|((byte_1>>0)&0x1)].c_argb
+                pixel_ptr += 8
+                tilemap_ptr += 1
+                if(tilemap_ptr == tilemap_ptr_wrap):
+                    tilemap_ptr -= 32
+            
+def render_sprites():
+    
+    for i in range(0, 176*176):
+        pixels_sprites_p0_back[i] = color_t.c_argb
+        pixels_sprites_p1_back[i] = color_t.c_argb
+    
     # OBJ (Sprite) Display
-    if(lcdc_1):
+    if(state.lcdc_b1):
         spritemem_ptr = 0
-        if(lcdc_2):
-            # 8x16 sprites  
-            for i in range(0, 40):
-                # read spritemem
-                y       = vid.spritemem[spritemem_ptr]-16
-                x       = vid.spritemem[spritemem_ptr+1]-8            
-                pattern = vid.spritemem[spritemem_ptr+2]&0xFE
-                flags   = vid.spritemem[spritemem_ptr+3]    
-                # TODO implement flags
-                # color map
-                sprite_color_map[0] = sprite_color_palette[0]
-                sprite_color_map[1] = sprite_color_palette[1]
-                sprite_color_map[2] = sprite_color_palette[2]
-                sprite_color_map[3] = sprite_color_palette[3]
-                # draw pattern
-                pattern_ptr = pattern*16
-                pixel_ptr = y*176+x
-                for i in range(0, 16):
-                    byte_1 = vid.videoram[pattern_ptr]       
-                    byte_2 = vid.videoram[pattern_ptr+1]       
-                    pixels_sprites_p0[pixel_ptr+0] = sprite_color_map[((byte_2>>6)&0x2)|((byte_1>>7)&0x1)].c_rgba
-                    pixels_sprites_p0[pixel_ptr+1] = sprite_color_map[((byte_2>>5)&0x2)|((byte_1>>6)&0x1)].c_rgba
-                    pixels_sprites_p0[pixel_ptr+2] = sprite_color_map[((byte_2>>4)&0x2)|((byte_1>>5)&0x1)].c_rgba
-                    pixels_sprites_p0[pixel_ptr+3] = sprite_color_map[((byte_2>>3)&0x2)|((byte_1>>4)&0x1)].c_rgba
-                    pixels_sprites_p0[pixel_ptr+4] = sprite_color_map[((byte_2>>2)&0x2)|((byte_1>>3)&0x1)].c_rgba
-                    pixels_sprites_p0[pixel_ptr+5] = sprite_color_map[((byte_2>>1)&0x2)|((byte_1>>2)&0x1)].c_rgba
-                    pixels_sprites_p0[pixel_ptr+6] = sprite_color_map[((byte_2>>0)&0x2)|((byte_1>>1)&0x1)].c_rgba
-                    pixels_sprites_p0[pixel_ptr+7] = sprite_color_map[((byte_2<<1)&0x2)|((byte_1>>0)&0x1)].c_rgba
-                    pixel_ptr += 176
-                    pattern_ptr += 2
-                # increment for next sprite
-                spritemem_ptr += 4      
+        if(state.lcdc_b2):
+            pass
         else:
             # 8x8 sprites            
             for i in range(0, 40):
                 # read spritemem
-                y       = vid.spritemem[spritemem_ptr]-16
-                x       = vid.spritemem[spritemem_ptr+1]-8            
-                pattern = vid.spritemem[spritemem_ptr+2]            
-                flags   = vid.spritemem[spritemem_ptr+3]   
-                # TODO implement flags 
-                # color map
-                sprite_color_map[0] = sprite_color_palette[0]
-                sprite_color_map[1] = sprite_color_palette[1]
-                sprite_color_map[2] = sprite_color_palette[2]
-                sprite_color_map[3] = sprite_color_palette[3]
-                # draw pattern
-                pattern_ptr = pattern*16
-                pixel_ptr = y*176+x
-                for i in range(0, 8):
-                    byte_1 = vid.videoram[pattern_ptr]       
-                    byte_2 = vid.videoram[pattern_ptr+1]       
-                    pixels_sprites_p0[pixel_ptr+0] = sprite_color_map[((byte_2>>6)&0x2)|((byte_1>>7)&0x1)].c_rgba
-                    pixels_sprites_p0[pixel_ptr+1] = sprite_color_map[((byte_2>>5)&0x2)|((byte_1>>6)&0x1)].c_rgba
-                    pixels_sprites_p0[pixel_ptr+2] = sprite_color_map[((byte_2>>4)&0x2)|((byte_1>>5)&0x1)].c_rgba
-                    pixels_sprites_p0[pixel_ptr+3] = sprite_color_map[((byte_2>>3)&0x2)|((byte_1>>4)&0x1)].c_rgba
-                    pixels_sprites_p0[pixel_ptr+4] = sprite_color_map[((byte_2>>2)&0x2)|((byte_1>>3)&0x1)].c_rgba
-                    pixels_sprites_p0[pixel_ptr+5] = sprite_color_map[((byte_2>>1)&0x2)|((byte_1>>2)&0x1)].c_rgba
-                    pixels_sprites_p0[pixel_ptr+6] = sprite_color_map[((byte_2>>0)&0x2)|((byte_1>>1)&0x1)].c_rgba
-                    pixels_sprites_p0[pixel_ptr+7] = sprite_color_map[((byte_2<<1)&0x2)|((byte_1>>0)&0x1)].c_rgba
-                    pixel_ptr += 176
-                    pattern_ptr += 2
+                y       = vid.spritemem[spritemem_ptr]
+                x       = vid.spritemem[spritemem_ptr+1]    
+                if(x > 0 and y > 0 and x < 168 and y < 160):
+                    pattern = vid.spritemem[spritemem_ptr+2]            
+                    flags   = vid.spritemem[spritemem_ptr+3]   
+                    # TODO implement flags 
+                    # TODO select color map (p0, p1)
+                    # draw pattern
+                    pattern_ptr = pattern*16
+                    pixel_ptr = y*176+x
+                    for i in range(0, 8):
+                        byte_1 = vid.videoram[pattern_ptr]       
+                        byte_2 = vid.videoram[pattern_ptr+1]       
+                        pixels_sprites_p0_back[pixel_ptr+0] = color_map_sprites_p0[((byte_2>>6)&0x2)|((byte_1>>7)&0x1)].c_argb
+                        pixels_sprites_p0_back[pixel_ptr+1] = color_map_sprites_p0[((byte_2>>5)&0x2)|((byte_1>>6)&0x1)].c_argb
+                        pixels_sprites_p0_back[pixel_ptr+2] = color_map_sprites_p0[((byte_2>>4)&0x2)|((byte_1>>5)&0x1)].c_argb
+                        pixels_sprites_p0_back[pixel_ptr+3] = color_map_sprites_p0[((byte_2>>3)&0x2)|((byte_1>>4)&0x1)].c_argb
+                        pixels_sprites_p0_back[pixel_ptr+4] = color_map_sprites_p0[((byte_2>>2)&0x2)|((byte_1>>3)&0x1)].c_argb
+                        pixels_sprites_p0_back[pixel_ptr+5] = color_map_sprites_p0[((byte_2>>1)&0x2)|((byte_1>>2)&0x1)].c_argb
+                        pixels_sprites_p0_back[pixel_ptr+6] = color_map_sprites_p0[((byte_2>>0)&0x2)|((byte_1>>1)&0x1)].c_argb
+                        pixels_sprites_p0_back[pixel_ptr+7] = color_map_sprites_p0[((byte_2<<1)&0x2)|((byte_1>>0)&0x1)].c_argb
+                        pixel_ptr += 176
+                        pattern_ptr += 2
                 # increment for next sprite
                 spritemem_ptr += 4                    
     return
@@ -439,14 +334,15 @@ def read_byte_debug(addr):
 # LCDC – LCD Control (R/W)    
 # Bit   Function                    Value=0             Value=1
 # 7     Control Operation           Stop completey      Operation          
-# 6     Tile Map Select             0x9800-0x9BFF       0x9C00-0x9FFF               
+# 6     Window Tile Map Select      0x9800-0x9BFF       0x9C00-0x9FFF               
 # 5     Window Display              Off                 On
 # 4     BG&Window Tile Data Select  Off                 On
-# 3     BG Tile Map Display Select  Off                 On
+# 3     BG Tile Map Select          Off                 On
 # 2     OBJ (Sprite) Size           8x8                 8x16 (WxH)    
 # 1     OBJ (Sprite) Display        Off                 On
 # 0     BG & Window Display         Off                 On
 def write_byte_0xFF40(addr, byte):
+    global pixels_background, pixels_sprites_p0, pixels_sprites_p1
     state.lcdc_b7 = (byte>>7)&0x01 # LCD Control Operation
     state.lcdc_b6 = (byte>>6)&0x01 # Window Tile Map Display Select
     state.lcdc_b5 = (byte>>5)&0x01 
@@ -455,14 +351,12 @@ def write_byte_0xFF40(addr, byte):
     state.lcdc_b2 = (byte>>2)&0x01 
     state.lcdc_b1 = (byte>>1)&0x01 
     state.lcdc_b0 = (byte>>0)&0x01 # BG & Window Display
-    if(state.lcdc_b7):        
-        pixels_background = pixels_background_buffer.active
-        pixels_sprites_p1 = pixels_sprites_p1_buffer.active
-        pixels_sprites_p0 = pixels_sprites_p0_buffer.active
-    else:
-        pixels_background = pixels_screen_off_buffer
-        pixels_sprites_p1 = pixels_screen_off_buffer
-        pixels_sprites_p0 = pixels_screen_off_buffer
+        
+    if(state.lcdc_b3 == 0):
+        state.background_tile_map_offset = 0x1800
+    else: 
+        state.background_tile_map_offset = 0x1C00
+    
     mem.iomem[0x40] = byte
 
 # STAT – LCD Status (R/W)
@@ -493,18 +387,28 @@ def write_byte_0xFF46(addr, byte):
     
 # BGP - BG & Window Palette Data (R/W)
 def write_byte_0xFF47(addr, byte):
-    mem.iomem[0x47] = byte 
+    global color_map_background
+    color_map_background[3] = color_palette_background[(byte>>6)&0x3]
+    color_map_background[2] = color_palette_background[(byte>>4)&0x3]
+    color_map_background[1] = color_palette_background[(byte>>2)&0x3]
+    color_map_background[0] = color_palette_background[(byte>>0)&0x3]
+    mem.iomem[0x47] = byte     
 
 # OBP0 - Object Palette 0 Data (R/W)
 def write_byte_0xFF48(addr, byte):
-    if(dlog.enable.mem_warnings):
-        dlog.print_warning("LCD", "write_byte_0xFF48 not implemented")  
+    global color_map_background
+    color_map_sprites_p0[3] = color_palette_sprites_p0[(byte>>6)&0x3]
+    color_map_sprites_p0[2] = color_palette_sprites_p0[(byte>>4)&0x3]
+    color_map_sprites_p0[1] = color_palette_sprites_p0[(byte>>2)&0x3]
+    color_map_sprites_p0[0] = color_palette_sprites_p0[(byte>>0)&0x3]
     mem.iomem[0x48] = byte 
     
 # OBP1 - Object Palette 1 Data (R/W)
 def write_byte_0xFF49(addr, byte):
-    if(dlog.enable.mem_warnings):
-        dlog.print_warning("LCD", "write_byte_0xFF49 not implemented")  
+    color_map_sprites_p1[3] = color_palette_sprites_p1[(byte>>6)&0x3]
+    color_map_sprites_p1[2] = color_palette_sprites_p1[(byte>>4)&0x3]
+    color_map_sprites_p1[1] = color_palette_sprites_p1[(byte>>2)&0x3]
+    color_map_sprites_p1[0] = color_palette_sprites_p1[(byte>>0)&0x3]
     mem.iomem[0x49] = byte 
 
 # WY - Window Y Position (R/W)

@@ -42,6 +42,10 @@ class Monitor(sdlboy_console_component.ConsoleComponent):
         # Z80
         self.monitor("BIOS:" + str(bool(mem.bios_running)))
         self.monitor("JOYP:" + "%{0:0{1}b}".format(mem.read_byte_silent(0xFF00),8))
+        self.monitor(" DIV:" + "0x{0:0{1}X}".format(mem.read_byte_silent(0xFF04),2))
+        self.monitor("TIMA:" + "0x{0:0{1}X}".format(mem.read_byte_silent(0xFF05),2))
+        self.monitor(" TIM:" + "0x{0:0{1}X}".format(mem.read_byte_silent(0xFF06),2))
+        self.monitor(" TAC:" + "%{0:0{1}b}".format(mem.read_byte_silent(0xFF07),8))
         self.monitor("")
         self.monitor("======Z80======")
         znhc = 0

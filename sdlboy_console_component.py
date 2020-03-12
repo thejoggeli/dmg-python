@@ -101,7 +101,7 @@ class ConsoleComponent:
             sdl2.SDL_DestroyTexture(self.viewport_texture)
         self.viewport_texture = sdl2.SDL_CreateTexture(
             self.renderer, 
-            sdl2.SDL_PIXELFORMAT_RGBA8888, 
+            sdl2.SDL_PIXELFORMAT_ARGB8888, 
             sdl2.SDL_TEXTUREACCESS_TARGET,
             self.viewport_local.w,
             self.viewport_local.h

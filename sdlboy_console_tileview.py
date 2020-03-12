@@ -11,7 +11,7 @@ class Color:
         self.g = g
         self.b = b
         self.a = a
-        self.c_rgba = (ctypes.c_uint)((r<<24)|(r<<16)|(r<<8)|a)
+        self.c_argb = (ctypes.c_uint)((a<<24)|(r<<16)|(g<<8)|b)
 
 class Tileview(sdlboy_console_component.ConsoleComponent):
     pixels = None
@@ -48,14 +48,14 @@ class Tileview(sdlboy_console_component.ConsoleComponent):
             for j in range(0, 8):          
                 byte_1 = vid.videoram[pattern_ptr]       
                 byte_2 = vid.videoram[pattern_ptr+1]       
-                pixels[pixel_index+0] = color_map[((byte_2>>6)&0x2)|((byte_1>>7)&0x1)].c_rgba
-                pixels[pixel_index+1] = color_map[((byte_2>>5)&0x2)|((byte_1>>6)&0x1)].c_rgba
-                pixels[pixel_index+2] = color_map[((byte_2>>4)&0x2)|((byte_1>>5)&0x1)].c_rgba
-                pixels[pixel_index+3] = color_map[((byte_2>>3)&0x2)|((byte_1>>4)&0x1)].c_rgba
-                pixels[pixel_index+4] = color_map[((byte_2>>2)&0x2)|((byte_1>>3)&0x1)].c_rgba
-                pixels[pixel_index+5] = color_map[((byte_2>>1)&0x2)|((byte_1>>2)&0x1)].c_rgba
-                pixels[pixel_index+6] = color_map[((byte_2>>0)&0x2)|((byte_1>>1)&0x1)].c_rgba
-                pixels[pixel_index+7] = color_map[((byte_2<<1)&0x2)|((byte_1>>0)&0x1)].c_rgba
+                pixels[pixel_index+0] = color_map[((byte_2>>6)&0x2)|((byte_1>>7)&0x1)].c_argba
+                pixels[pixel_index+1] = color_map[((byte_2>>5)&0x2)|((byte_1>>6)&0x1)].c_argba
+                pixels[pixel_index+2] = color_map[((byte_2>>4)&0x2)|((byte_1>>5)&0x1)].c_argba
+                pixels[pixel_index+3] = color_map[((byte_2>>3)&0x2)|((byte_1>>4)&0x1)].c_argba
+                pixels[pixel_index+4] = color_map[((byte_2>>2)&0x2)|((byte_1>>3)&0x1)].c_argba
+                pixels[pixel_index+5] = color_map[((byte_2>>1)&0x2)|((byte_1>>2)&0x1)].c_argba
+                pixels[pixel_index+6] = color_map[((byte_2>>0)&0x2)|((byte_1>>1)&0x1)].c_argba
+                pixels[pixel_index+7] = color_map[((byte_2<<1)&0x2)|((byte_1>>0)&0x1)].c_argba
                 # point to next pair of bytes
                 pattern_ptr += 2                
                 # point to next row
@@ -103,7 +103,7 @@ class Tileview(sdlboy_console_component.ConsoleComponent):
             sdl2.SDL_DestroyTexture(self.tiles_texture)        
         self.tiles_texture = sdl2.SDL_CreateTexture(
             self.renderer, 
-            sdl2.SDL_PIXELFORMAT_RGBA8888, 
+            sdl2.SDL_PIXELFORMAT_ARGB8888, 
             sdl2.SDL_TEXTUREACCESS_TARGET,
             self.tiles_texture_rect.w,
             self.tiles_texture_rect.h

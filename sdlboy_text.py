@@ -119,7 +119,7 @@ class Text:
             sdl2.SDL_DestroyTexture(self.texture)            
         self.texture = sdl2.SDL_CreateTexture(
             glob.renderer, 
-            sdl2.SDL_PIXELFORMAT_RGBA8888, 
+            sdl2.SDL_PIXELFORMAT_ARGB8888, 
             sdl2.SDL_TEXTUREACCESS_TARGET,
             self.buffer_rect.w,
             self.buffer_rect.h

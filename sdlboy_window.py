@@ -74,6 +74,7 @@ def main():
     # renderer
     renderer_flags = sdl2.SDL_RENDERER_ACCELERATED | sdl2.SDL_RENDERER_TARGETTEXTURE
     glob.renderer = sdl2.SDL_CreateRenderer(glob.window, -1, renderer_flags)
+    sdl2.SDL_SetRenderDrawBlendMode(glob.renderer, sdl2.SDL_BLENDMODE_BLEND)
 
     # lcd buffer
     glob.lcd_rect_tex = sdl2.SDL_Rect(0, 0,  176, 176)
@@ -83,29 +84,32 @@ def main():
     # background
     glob.lcd_texture_background = sdl2.SDL_CreateTexture(
         glob.renderer, 
-        sdl2.SDL_PIXELFORMAT_RGBA8888, 
+        sdl2.SDL_PIXELFORMAT_ARGB8888, 
         sdl2.SDL_TEXTUREACCESS_STREAMING,
         glob.lcd_rect_tex.w,
         glob.lcd_rect_tex.h,
     )
+    sdl2.SDL_SetTextureBlendMode(glob.lcd_texture_background, sdl2.SDL_BLENDMODE_BLEND)
     
     # sprites p1
     glob.lcd_texture_sprites_p1 = sdl2.SDL_CreateTexture(
         glob.renderer, 
-        sdl2.SDL_PIXELFORMAT_RGBA8888, 
+        sdl2.SDL_PIXELFORMAT_ARGB8888, 
         sdl2.SDL_TEXTUREACCESS_STREAMING,
         glob.lcd_rect_tex.w,
         glob.lcd_rect_tex.h,
     )
+    sdl2.SDL_SetTextureBlendMode(glob.lcd_texture_sprites_p1, sdl2.SDL_BLENDMODE_BLEND)
     
     # sprites p0
     glob.lcd_texture_sprites_p0 = sdl2.SDL_CreateTexture(
         glob.renderer, 
-        sdl2.SDL_PIXELFORMAT_RGBA8888, 
+        sdl2.SDL_PIXELFORMAT_ARGB8888, 
         sdl2.SDL_TEXTUREACCESS_STREAMING,
         glob.lcd_rect_tex.w,
         glob.lcd_rect_tex.h,
     )
+    sdl2.SDL_SetTextureBlendMode(glob.lcd_texture_sprites_p0, sdl2.SDL_BLENDMODE_BLEND)
     
     # text
     sdlboy_text.init(glob.renderer)    
@@ -159,49 +163,57 @@ def main():
                 glob.vblank_occured = False
                 while(not glob.vblank_occured):
                     gameboy.tick()
-        lcd.render()
                     
         # render
         sdl2.SDL_SetRenderDrawColor(glob.renderer, 0, 0, 0, 0xFF)
         sdl2.SDL_RenderClear(glob.renderer)
-        sdl2.SDL_UpdateTexture(
-            glob.lcd_texture_background, 
-            glob.lcd_rect_src,
-            lcd.pixels_background,
-            glob.lcd_rect_tex.w*4,
-        )
-        sdl2.SDL_UpdateTexture(
-            glob.lcd_texture_sprites_p1, 
-            glob.lcd_rect_src,
-            lcd.pixels_background,
-            glob.lcd_rect_tex.w*4,
-        )
-        sdl2.SDL_UpdateTexture(
-            glob.lcd_texture_sprites_p0, 
-            glob.lcd_rect_src,
-            lcd.pixels_background,
-            glob.lcd_rect_tex.w*4,
-        )
-        sdl2.SDL_RenderCopy(
-            glob.renderer, 
-            glob.lcd_texture_background, 
-            glob.lcd_rect_src, 
-            glob.lcd_rect_dst,
-        )
-        """
-        sdl2.SDL_RenderCopy(
-            glob.renderer, 
-            glob.lcd_texture_sprites_p1, 
-            glob.lcd_rect_src, 
-            glob.lcd_rect_dst
-        )
-        sdl2.SDL_RenderCopy(
-            glob.renderer, 
-            glob.lcd_texture_sprites_p0, 
-            glob.lcd_rect_src, 
-            glob.lcd_rect_dst
-        )
-        """
+        if(lcd.state.lcdc_b7):
+            sdl2.SDL_UpdateTexture(
+                glob.lcd_texture_background, 
+                glob.lcd_rect_tex,
+                lcd.pixels_background_front,
+                glob.lcd_rect_tex.w*4,
+            )
+            sdl2.SDL_UpdateTexture(
+                glob.lcd_texture_sprites_p1, 
+                glob.lcd_rect_tex,
+                lcd.pixels_sprites_p1_front,
+                glob.lcd_rect_tex.w*4,
+            )
+            sdl2.SDL_UpdateTexture(
+                glob.lcd_texture_sprites_p0, 
+                glob.lcd_rect_tex,
+                lcd.pixels_sprites_p0_front,
+                glob.lcd_rect_tex.w*4,
+            )
+            sdl2.SDL_RenderCopy(
+                glob.renderer, 
+                glob.lcd_texture_background, 
+                glob.lcd_rect_src, 
+                glob.lcd_rect_dst,
+            )         
+            sdl2.SDL_RenderCopy(
+                glob.renderer, 
+                glob.lcd_texture_sprites_p1, 
+                glob.lcd_rect_src, 
+                glob.lcd_rect_dst
+            )
+            sdl2.SDL_RenderCopy(
+                glob.renderer, 
+                glob.lcd_texture_sprites_p0, 
+                glob.lcd_rect_src, 
+                glob.lcd_rect_dst
+            )
+        else:
+            sdl2.SDL_SetRenderDrawColor(
+                glob.renderer, 
+                lcd.color_0.r,
+                lcd.color_0.g,
+                lcd.color_0.b,
+                lcd.color_0.a,
+            )
+            sdl2.SDL_RenderFillRect(glob.renderer, glob.lcd_rect_dst)
+            
         """
         # window title
         title = b"Dot Matrix Game"

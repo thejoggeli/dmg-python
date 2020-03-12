@@ -80,7 +80,6 @@ def set_open(b):
     is_open = b
     if(is_open):
         # open
-        sdl2.SDL_SetRenderDrawBlendMode(glob.renderer, sdl2.SDL_BLENDMODE_BLEND)
         sdl2.SDL_StartTextInput();
         is_open = True
         dlog.enable.errors()
@@ -439,8 +438,7 @@ class InputHandler:
                 # loop until cpu time = N seconds
                 target_time = float(val.replace("=", "").strip())
                 while(z80.state.time_passed < target_time):
-                    self.do_loop()             
-            lcd.render()
+                    self.do_loop()        
         elif(user_input.startswith("pc")):
             if(log_free):
                 dlog.enable.errors()
@@ -461,8 +459,7 @@ class InputHandler:
                 while(z80.reg.pc != target_pc):
                     self.do_loop()   
             else:
-                raise ValueError("invalid input")             
-            lcd.render()
+                raise ValueError("invalid input")     
             dlog.print_msg("SYS", "PC is now at " + "0x{0:0{1}X}".format(z80.reg.pc, 4))
         elif(user_input.strip() == ""):
             if(log_free):
@@ -470,7 +467,6 @@ class InputHandler:
             instr = cld.decode_instruction_to_string(z80.reg.pc)
             textview.print_line(instr)
             self.do_loop()            
-            lcd.render()
         elif(user_input.startswith("s")):
             if(log_free):
                 dlog.enable.errors()
@@ -478,8 +474,7 @@ class InputHandler:
             user_input = user_input.replace("+", "")
             steps = int(user_input)
             for i in range(0, steps):
-                self.do_loop()              
-            lcd.render()
+                self.do_loop()     
         else:       
             if(log_free): 
                 dlog.enable.all() 
@@ -488,8 +483,7 @@ class InputHandler:
                 for i in range(0, steps):
                     instr = cld.decode_instruction_to_string(z80.reg.pc)
                     textview.print_line(instr)
-                    self.do_loop()              
-                lcd.render()
+                    self.do_loop()   
             except:           
                 raise ValueError("invalid input")
         real_time_passed = time.time() - real_time_start
